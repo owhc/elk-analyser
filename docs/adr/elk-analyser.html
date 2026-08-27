@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"/>
+<meta name="updated" content="2026-08-26 23:58:27 +0800"/>
+<title>ELK Analyser — 系統資料流架構圖</title>
+<style>
+:root{
+  --bg:#07111f;--surface:#0d1e33;--border:#1a3050;
+  --es:#f59e0b;--an:#38bdf8;--bob:#f59e0b;--vol:#a78bfa;--kb:#fb923c;--web:#34d399;
+  --txt:#e2eaf4;--muted:#4a6080;--dim:#2a4060;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--txt);font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;padding:32px 28px;font-size:12px;line-height:1.5;min-width:1080px;}
+
+.hd{display:flex;align-items:baseline;gap:12px;margin-bottom:4px;}
+h1{font-size:1.1rem;font-weight:700;letter-spacing:-.01em;}
+.badge{font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:2px 7px;border-radius:3px;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--an);}
+.sub{color:var(--muted);font-size:.68rem;margin-bottom:24px;}
+
+/* diagram wrapper */
+.diagram{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;overflow-x:auto;}
+
+/* main flow */
+.flow{display:flex;align-items:stretch;gap:0;min-width:1000px;}
+
+/* group */
+.grp{border-radius:7px;padding:10px;position:relative;}
+.grp-title{position:absolute;top:-8px;left:10px;padding:0 6px;font-size:.55rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;background:var(--surface);}
+.grp-trigger{border:1px dashed rgba(251,146,60,.35);}.grp-trigger .grp-title{color:var(--kb);}
+.grp-pipe{border:1px dashed rgba(56,189,248,.25);}.grp-pipe .grp-title{color:var(--an);}
+.grp-bob{border:1px dashed rgba(245,158,11,.35);}.grp-bob .grp-title{color:var(--bob);}
+.grp-out{border:1px dashed rgba(52,211,153,.3);}.grp-out .grp-title{color:var(--web);}
+
+/* node */
+.node{border-radius:6px;padding:9px 11px;min-width:118px;}
+.nt{font-size:.72rem;font-weight:700;line-height:1.3;}
+.ns{font-size:.6rem;color:var(--muted);margin-top:2px;line-height:1.4;}
+.nk{font-size:.57rem;font-weight:600;margin-top:4px;}
+
+/* trigger nodes */
+.n-kb{background:rgba(251,146,60,.08);border:1.5px solid rgba(251,146,60,.4);}.nk-kb{color:var(--kb);}
+.n-ui{background:rgba(52,211,153,.06);border:1.5px solid rgba(52,211,153,.3);}.nk-ui{color:var(--web);}
+.n-cli{background:rgba(56,189,248,.05);border:1.5px dashed rgba(56,189,248,.25);}.nk-cli{color:var(--an);}
+/* pipeline nodes */
+.n-ext{background:rgba(56,189,248,.06);border:1.5px solid rgba(56,189,248,.3);}.nk-ext{color:var(--an);}
+.n-pp{background:rgba(56,189,248,.05);border:1.5px solid rgba(56,189,248,.22);}.nk-pp{color:var(--an);}
+.n-bb{background:rgba(56,189,248,.05);border:1.5px solid rgba(56,189,248,.22);}.nk-bb{color:var(--an);}
+/* bob */
+.n-bob{background:rgba(245,158,11,.07);border:1.5px solid rgba(245,158,11,.4);}.nk-bob{color:var(--bob);}
+/* output */
+.n-rb{background:rgba(52,211,153,.05);border:1.5px solid rgba(52,211,153,.25);}.nk-rb{color:var(--web);}
+.n-rp{background:rgba(52,211,153,.07);border:1.5px solid rgba(52,211,153,.4);}.nk-rp{color:var(--web);}
+/* external */
+.n-es{background:rgba(245,158,11,.07);border:1.5px solid rgba(245,158,11,.35);}.nk-es{color:var(--es);}
+.n-sqlite{background:rgba(167,139,250,.07);border:1.5px solid rgba(167,139,250,.35);}.nk-sqlite{color:var(--vol);}
+
+/* connectors */
+.con{display:flex;align-items:center;justify-content:center;padding:0 4px;flex-shrink:0;}
+.con-v{display:flex;flex-direction:column;align-items:center;}
+.arr{display:flex;align-items:center;width:100%;}
+.arr .line{height:2px;flex:1;background:currentColor;}
+.arr .head{border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:6px solid currentColor;}
+.arr-d{display:flex;align-items:center;width:100%;}
+.arr-d .line{height:0;border-top:2px dashed currentColor;flex:1;}
+.arr-d .head{border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:6px solid currentColor;}
+.arr-up{display:flex;flex-direction:column;align-items:center;}
+.arr-up .vline{width:2px;flex:1;background:currentColor;}
+.arr-up .vhead{border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:6px solid currentColor;}
+.arr-dn{display:flex;flex-direction:column;align-items:center;}
+.arr-dn .vline{width:2px;flex:1;background:currentColor;}
+.arr-dn .vhead{border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid currentColor;}
+.clabel{font-size:.55rem;color:var(--muted);white-space:nowrap;text-align:center;margin-top:3px;}
+
+.col{display:flex;flex-direction:column;}
+.col.gap{gap:7px;}
+.row-c{display:flex;align-items:center;}
+
+/* bottom bar */
+.bottom{display:flex;align-items:flex-start;gap:0;margin-top:20px;padding-top:16px;border-top:1px solid var(--dim);}
+
+/* legend */
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--dim);font-size:.6rem;color:var(--muted);}
+.leg{display:flex;align-items:center;gap:5px;}
+.leg-swatch{width:14px;height:8px;border-radius:2px;}
+.leg-dash{width:20px;height:0;border-top:2px dashed currentColor;}
+
+/* cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:18px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:12px;}
+.card-hd{display:flex;align-items:center;gap:6px;margin-bottom:7px;}
+.cdot{width:6px;height:6px;border-radius:50%;}
+.card h3{font-size:.72rem;font-weight:600;}
+.card li{font-size:.62rem;color:var(--muted);line-height:1.65;list-style:none;padding-left:10px;position:relative;}
+.card li::before{content:'›';position:absolute;left:0;color:var(--dim);}
+
+footer{text-align:center;margin-top:16px;color:var(--dim);font-size:.6rem;border-top:1px solid var(--dim);padding-top:10px;}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <h1>ELK Analyser</h1>
+  <span class="badge">系統資料流架構圖</span>
+</div>
+<p class="sub">Python + Bob CLI（本機）+ python-pptx · 事件驅動觸發 · 因果鏈推理</p>
+
+<div class="diagram">
+
+  <!-- ── Main flow ── -->
+  <div class="flow">
+
+    <!-- 觸發層 -->
+    <div class="grp grp-trigger col gap" style="min-width:152px">
+      <div class="grp-title">觸發層</div>
+
+      <div class="node n-kb">
+        <div class="nt">Kibana Alert</div>
+        <div class="ns">Webhook · 條件成立</div>
+        <div class="nk nk-kb">to_time + lookback_minutes</div>
+      </div>
+
+      <div class="node n-ui">
+        <div class="nt">Web UI</div>
+        <div class="ns">:3001 Nginx → API proxy</div>
+        <div class="nk nk-ui">from_time + to_time</div>
+      </div>
+
+      <div class="node n-cli">
+        <div class="nt">CLI</div>
+        <div class="ns">cli.py run --from --to</div>
+        <div class="nk nk-cli">click · 主動查詢</div>
+      </div>
+    </div>
+
+    <!-- → -->
+    <div class="con col" style="gap:4px;justify-content:center;min-width:60px">
+      <div class="arr" style="color:var(--an);width:52px"><div class="line"></div><div class="head"></div></div>
+      <div class="clabel">Query Window</div>
+    </div>
+
+    <!-- analyser/ 資料管道 -->
+    <div class="grp grp-pipe row-c" style="gap:0;align-items:center;">
+      <div class="grp-title">elk-analyser container · 資料管道</div>
+
+      <div class="node n-ext" style="min-width:140px">
+        <div class="nt">extractor.py</div>
+        <div class="ns">外部 ES REST 查詢</div>
+        <div class="nk nk-ext">Checkpoint 讀寫</div>
+      </div>
+
+      <div class="con col" style="gap:3px;min-width:48px">
+        <div class="arr" style="color:var(--an);width:42px"><div class="line"></div><div class="head"></div></div>
+        <div class="clabel">原始日誌</div>
+      </div>
+
+      <div class="node n-pp" style="min-width:148px">
+        <div class="nt">preprocessor.py</div>
+        <div class="ns">日誌清洗 + 分組</div>
+        <div class="nk nk-pp">Trace ID / 時間窗口</div>
+      </div>
+
+      <div class="con col" style="gap:3px;min-width:48px">
+        <div class="arr" style="color:var(--an);width:42px"><div class="line"></div><div class="head"></div></div>
+        <div class="clabel">事件序列 JSON</div>
+      </div>
+
+      <div class="node n-bb" style="min-width:140px">
+        <div class="nt">bob_bridge.py</div>
+        <div class="ns">subprocess + @filename</div>
+        <div class="nk nk-bb">JSON 解析回傳</div>
+      </div>
+    </div>
+
+    <!-- ⇄ Bob CLI -->
+    <div class="con col" style="gap:10px;justify-content:center;align-items:center;min-width:66px">
+      <div class="col" style="align-items:center;gap:2px">
+        <div class="arr" style="color:var(--bob);width:58px"><div class="line"></div><div class="head"></div></div>
+        <div class="clabel" style="color:var(--bob)">@file 輸入</div>
+      </div>
+      <div class="col" style="align-items:center;gap:2px">
+        <div class="arr-d" style="color:var(--bob);width:58px"><div class="line"></div><div class="head"></div></div>
+        <div class="clabel" style="color:var(--bob)">根因 JSON</div>
+      </div>
+    </div>
+
+    <!-- Bob CLI -->
+    <div class="grp grp-bob" style="min-width:138px;display:flex;align-items:center;">
+      <div class="grp-title">Bob CLI（內建）</div>
+      <div class="node n-bob" style="width:100%">
+        <div class="nt">log-analyst mode</div>
+        <div class="ns">bob run --mode log-analyst</div>
+        <div class="ns">container 內直接執行</div>
+        <div class="nk nk-bob">event_chains JSON</div>
+      </div>
+    </div>
+
+    <!-- → -->
+    <div class="con col" style="gap:4px;justify-content:center;min-width:56px">
+      <div class="arr" style="color:var(--web);width:48px"><div class="line"></div><div class="head"></div></div>
+      <div class="clabel">分析結果</div>
+    </div>
+
+    <!-- 產出層 -->
+    <div class="grp grp-out col gap" style="min-width:138px;justify-content:center;">
+      <div class="grp-title">產出層</div>
+      <div class="node n-rb">
+        <div class="nt">report_builder.py</div>
+        <div class="ns">python-pptx 報告生成</div>
+        <div class="nk nk-rb">華銀藍設計風格</div>
+      </div>
+      <div class="con-v" style="height:22px">
+        <div class="arr-dn" style="color:var(--web);height:100%">
+          <div class="vline"></div><div class="vhead"></div>
+        </div>
+      </div>
+      <div class="node n-rp">
+        <div class="nt">診斷報告 .pptx</div>
+        <div class="ns">/reports/ (elk_reports)</div>
+        <div class="nk nk-rp">封面·摘要·根因·建議</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Bottom: External ES + SQLite ── -->
+  <div class="bottom">
+
+    <!-- External ES -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:220px;">
+      <!-- extractor → ES 查詢（實線向下） -->
+      <div style="display:flex;gap:32px;width:100%;justify-content:center;">
+        <div class="col" style="align-items:center;gap:2px">
+          <div class="con-v" style="height:28px">
+            <div class="arr-dn" style="color:var(--es);height:100%">
+              <div class="vline"></div><div class="vhead"></div>
+            </div>
+          </div>
+          <div class="clabel" style="color:var(--es)">REST 查詢</div>
+        </div>
+        <!-- ES → extractor 回傳日誌（虛線向上） -->
+        <div class="col" style="align-items:center;gap:2px">
+          <div class="con-v" style="height:28px">
+            <div class="arr-up" style="color:var(--es);height:100%">
+              <div class="vhead"></div><div class="vline" style="background:none;width:0;flex:1;border-left:2px dashed var(--es)"></div>
+            </div>
+          </div>
+          <div class="clabel" style="color:var(--es)">日誌資料</div>
+        </div>
+      </div>
+      <div class="node n-es" style="width:100%;text-align:center;min-width:200px;">
+        <div class="nt">Elasticsearch</div>
+        <div class="ns">外部 ELK 叢集 · port 9200</div>
+        <div class="nk nk-es">config.yaml 設定連線 · mock / local / remote</div>
+      </div>
+    </div>
+
+    <div style="flex:1"></div>
+
+    <!-- SQLite -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:0;min-width:220px;">
+      <div style="display:flex;gap:32px;width:100%;justify-content:center;">
+        <div class="col" style="align-items:center;gap:2px">
+          <div class="con-v" style="height:28px">
+            <div class="arr-up" style="color:var(--vol);height:100%">
+              <div class="vhead"></div><div class="vline"></div>
+            </div>
+          </div>
+          <div class="clabel" style="color:var(--vol)">Checkpoint</div>
+        </div>
+        <div class="col" style="align-items:center;gap:2px">
+          <div class="con-v" style="height:28px">
+            <div class="arr-dn" style="color:var(--vol);height:100%">
+              <div class="vline"></div><div class="vhead"></div>
+            </div>
+          </div>
+          <div class="clabel" style="color:var(--vol)">寫入摘要</div>
+        </div>
+      </div>
+      <div class="node n-sqlite" style="width:100%;text-align:center;min-width:200px;">
+        <div class="nt">SQLite (elk_db)</div>
+        <div class="ns">analysis_jobs 表</div>
+        <div class="ns">checkpoint 表</div>
+        <div class="nk nk-sqlite">查詢歷史 → CLI / API</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- legend -->
+  <div class="legend">
+    <div class="leg"><div class="leg-swatch" style="background:rgba(251,146,60,.15);border:1px solid rgba(251,146,60,.5)"></div>Kibana Alert 觸發</div>
+    <div class="leg"><div class="leg-swatch" style="background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.4)"></div>Web UI / 產出</div>
+    <div class="leg"><div class="leg-swatch" style="background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.35)"></div>資料管道</div>
+    <div class="leg"><div class="leg-swatch" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4)"></div>Bob CLI / 外部 ES</div>
+    <div class="leg"><div class="leg-swatch" style="background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.4)"></div>持久化</div>
+    <div class="leg"><div class="leg-dash" style="color:var(--bob)"></div>Bob CLI 回傳（虛線）</div>
+    <div class="leg"><div class="leg-dash" style="color:var(--es)"></div>ES 日誌回傳（虛線）</div>
+  </div>
+
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-hd"><div class="cdot" style="background:var(--kb)"></div><h3>觸發模式</h3></div>
+    <ul>
+      <li>Kibana Alert — Webhook 自動觸發（to_time + lookback_minutes）</li>
+      <li>Web UI — :3001 Nginx proxy → from_time + to_time</li>
+      <li>CLI — podman exec elk-analyser python cli.py run</li>
+      <li>ES Watcher — 備選（from_time + to_time）</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-hd"><div class="cdot" style="background:var(--an)"></div><h3>資料管道</h3></div>
+    <ul>
+      <li>extractor.py — 外部 ES REST API + Checkpoint 讀寫</li>
+      <li>preprocessor.py — Trace ID 優先，fallback 時間窗口（5min）</li>
+      <li>bob_bridge.py — subprocess + @filename，本機直接呼叫</li>
+      <li>欄位映射由 config.yaml field_mapping 可配置</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-hd"><div class="cdot" style="background:var(--bob)"></div><h3>Bob CLI（本機執行）</h3></div>
+    <ul>
+      <li>node:22-slim 基底 image，bob CLI 直接安裝</li>
+      <li>log-analyst custom mode — 因果鏈推理</li>
+      <li>輸出契約：event_chains + summary JSON</li>
+      <li>獨立邊界，未來可替換 AI 引擎</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-hd"><div class="cdot" style="background:var(--vol)"></div><h3>持久化</h3></div>
+    <ul>
+      <li>SQLite (elk_db) — analysis_jobs + checkpoint 表</li>
+      <li>from_time 優先序：from_time → lookback_minutes → Checkpoint → fallback</li>
+      <li>PPTX 報告存於 elk_reports volume，API 可下載</li>
+      <li>Elasticsearch 為外部服務，不在 compose 內</li>
+    </ul>
+  </div>
+</div>
+
+<footer>ELK Analyser · Python 3.x + Bob CLI + python-pptx · Made with IBM Bob</footer>
+</body>
+</html>

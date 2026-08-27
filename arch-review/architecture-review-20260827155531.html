@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="created" content="2026-08-27 15:55:31 +0800">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELK Analyser — Architecture Review</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; background: #0f1117; color: #e2e8f0; }
+  .badge-strong    { background:#16a34a22; color:#4ade80; border:1px solid #16a34a55; }
+  .badge-worth     { background:#ca8a0422; color:#fbbf24; border:1px solid #ca8a0455; }
+  .badge-speculate { background:#7c3aed22; color:#c084fc; border:1px solid #7c3aed55; }
+  .badge-adr       { background:#dc262622; color:#f87171; border:1px solid #dc262655; }
+  .card { background:#161b27; border:1px solid #1e2a3d; border-radius:12px; }
+  .depth-bar-bg { background:#1e2a3d; border-radius:4px; height:12px; }
+  .depth-bar    { border-radius:4px; height:12px; }
+  .mermaid { background:transparent !important; }
+  pre.code { background:#0d1117; border:1px solid #1e2a3d; border-radius:8px; padding:14px; font-size:12px; overflow-x:auto; color:#93c5fd; }
+  .before-box { background:#1a1025; border:1px solid #4c1d9540; border-radius:8px; padding:16px; }
+  .after-box  { background:#0f2010; border:1px solid #14532d40; border-radius:8px; padding:16px; }
+  .sec-title { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#64748b; }
+  .arrow { color:#475569; font-size:18px; }
+  h1 { font-size:1.6rem; font-weight:700; }
+  h2 { font-size:1.1rem; font-weight:600; }
+  h3 { font-size:0.95rem; font-weight:600; }
+</style>
+</head>
+<body class="min-h-screen p-6 md:p-10">
+
+<!-- Header -->
+<div class="max-w-5xl mx-auto">
+  <div class="mb-2 text-xs text-slate-500">ELK Analyser · 2026-08-27</div>
+  <h1 class="text-slate-100 mb-1">架構審查報告</h1>
+  <p class="text-slate-400 text-sm mb-8">基於 <code class="text-sky-400">codebase-design</code> 設計詞彙，掃描 <strong>9 個模組、~1,700 行</strong>程式碼，識別模組深度不足、介面過寬、局部性缺失等摩擦點。</p>
+
+  <!-- Depth heatmap -->
+  <div class="card p-5 mb-8">
+    <div class="sec-title mb-3">各模組深度概覽（介面複雜度 vs 實作規模）</div>
+    <div class="space-y-2 text-sm">
+      <!-- module, interface complexity (red), impl size (green) -->
+      <div class="flex items-center gap-3">
+        <span class="w-44 text-slate-400 text-xs font-mono truncate">analysis_pipeline.py</span>
+        <div class="flex-1 flex gap-1 items-center">
+          <div class="depth-bar-bg flex-1"><div class="depth-bar bg-rose-500" style="width:55%"></div></div>
+          <span class="text-xs text-rose-400 w-24">介面偏寬</span>
+        </div>
+        <span class="text-xs text-slate-500">179 行</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="w-44 text-slate-400 text-xs font-mono truncate">api.py</span>
+        <div class="flex-1 flex gap-1 items-center">
+          <div class="depth-bar-bg flex-1"><div class="depth-bar bg-rose-600" style="width:82%"></div></div>
+          <span class="text-xs text-rose-400 w-24">嚴重過寬</span>
+        </div>
+        <span class="text-xs text-slate-500">475 行</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="w-44 text-slate-400 text-xs font-mono truncate">extractor.py</span>
+        <div class="flex-1 flex gap-1 items-center">
+          <div class="depth-bar-bg flex-1"><div class="depth-bar bg-amber-500" style="width:48%"></div></div>
+          <span class="text-xs text-amber-400 w-24">有摩擦</span>
+        </div>
+        <span class="text-xs text-slate-500">239 行</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="w-44 text-slate-400 text-xs font-mono truncate">preprocessor.py</span>
+        <div class="flex-1 flex gap-1 items-center">
+          <div class="depth-bar-bg flex-1"><div class="depth-bar bg-emerald-500" style="width:28%"></div></div>
+          <span class="text-xs text-emerald-400 w-24">較深</span>
+        </div>
+        <span class="text-xs text-slate-500">198 行</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="w-44 text-slate-400 text-xs font-mono truncate">bob_bridge.py</span>
+        <div class="flex-1 flex gap-1 items-center">
+          <div class="depth-bar-bg flex-1"><div class="depth-bar bg-amber-500" style="width:45%"></div></div>
+          <span class="text-xs text-amber-400 w-24">有摩擦</span>
+        </div>
+        <span class="text-xs text-slate-500">206 行</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="w-44 text-slate-400 text-xs font-mono truncate">report_builder.py</span>
+        <div class="flex-1 flex gap-1 items-center">
+          <div class="depth-bar-bg flex-1"><div class="depth-bar bg-amber-400" style="width:38%"></div></div>
+          <span class="text-xs text-amber-400 w-24">可改善</span>
+        </div>
+        <span class="text-xs text-slate-500">327 行</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="w-44 text-slate-400 text-xs font-mono truncate">cli.py</span>
+        <div class="flex-1 flex gap-1 items-center">
+          <div class="depth-bar-bg flex-1"><div class="depth-bar bg-rose-500" style="width:50%"></div></div>
+          <span class="text-xs text-rose-400 w-24">SQL 洩漏</span>
+        </div>
+        <span class="text-xs text-slate-500">165 行</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Candidate cards -->
+  <div class="space-y-8">
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- CANDIDATE 1: DAL -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div class="card p-6">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <span class="text-xs text-slate-500 font-mono">候選 #1</span>
+          <h2 class="text-slate-100 mt-0.5">資料存取層（DAL）深化</h2>
+          <p class="text-xs text-slate-500 mt-1 font-mono">analysis_pipeline.py · api.py · cli.py · extractor.py</p>
+        </div>
+        <span class="badge-strong text-xs px-3 py-1 rounded-full font-semibold">Strong</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5 text-sm">
+        <div>
+          <div class="sec-title mb-1">問題</div>
+          <p class="text-slate-400 text-xs leading-relaxed">SQL 查詢散落 <strong class="text-slate-200">20+ 處</strong>，分佈在 <code class="text-sky-400">analysis_pipeline</code>、<code class="text-sky-400">api</code>、<code class="text-sky-400">cli</code>、<code class="text-sky-400">extractor</code> 四個模組。每個模組都直接呼叫 <code class="text-sky-400">sqlite3.connect()</code>，沒有介面隔離。每次請求開啟新連線。<br><br>刪除測試：若刪掉所有散落的 sqlite3 呼叫，複雜度會在 20+ 個呼叫端重新出現——這是真實的 seam。</p>
+        </div>
+        <div>
+          <div class="sec-title mb-1">解法</div>
+          <p class="text-slate-400 text-xs leading-relaxed">建立一個 <strong class="text-slate-200">深模組</strong> <code class="text-sky-400">JobRepository</code>：介面只暴露業務操作（<code>create_job</code>、<code>complete_job</code>、<code>fail_job</code>、<code>list_jobs</code>、<code>get_checkpoint</code>、<code>set_checkpoint</code>），所有 SQL 與連線管理藏在實作內。同時增加一個 <code class="text-sky-400">InMemoryJobRepository</code> adapter，讓測試完全不依賴磁碟。</p>
+        </div>
+        <div>
+          <div class="sec-title mb-1">效益</div>
+          <p class="text-slate-400 text-xs leading-relaxed"><strong class="text-emerald-400">局部性（Locality）</strong>：SQL schema 變動只改一個地方。<br><br><strong class="text-emerald-400">槓桿（Leverage）</strong>：20+ 個呼叫端免費升級（例如加索引、加重試）。<br><br><strong class="text-emerald-400">測試</strong>：整個 pipeline 可用 in-memory adapter 跑，無需真實 DB 檔案。<br><br><strong class="text-rose-400">現有問題</strong>：<code>api.py:370</code> 的動態 SQL 字串拼接有 SQL injection 風險，集中後可一次修復。</p>
+        </div>
+      </div>
+
+      <!-- Before / After diagram -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="before-box">
+          <div class="sec-title mb-2 text-purple-400">BEFORE — 淺散架構</div>
+          <pre class="code text-xs">api.py
+  ├─ sqlite3.connect(db_path) ← 每個 endpoint 各一條
+  ├─ SELECT * FROM analysis_jobs
+  ├─ DELETE FROM analysis_jobs WHERE id=?
+  └─ IN ({placeholders})  ← ⚠️ 動態 SQL
+
+analysis_pipeline.py
+  ├─ sqlite3.connect(db_path) ← 再一條
+  ├─ INSERT INTO analysis_jobs ...
+  ├─ UPDATE SET status=? ...
+  └─ INSERT/REPLACE INTO checkpoint ...
+
+cli.py
+  ├─ sqlite3.connect(db_path) ← 又一條
+  └─ SELECT ... FROM analysis_jobs
+
+extractor.py
+  ├─ sqlite3.connect(db_path) ← 又一條
+  ├─ SELECT analysed_to FROM checkpoint
+  └─ INSERT OR REPLACE INTO checkpoint ...</pre>
+        </div>
+        <div class="after-box">
+          <div class="sec-title mb-2 text-emerald-400">AFTER — 深模組</div>
+          <pre class="code text-xs"># db/job_repository.py
+class JobRepository:           # 唯一的 seam
+    def create_job(...) -> str
+    def complete_job(...)
+    def fail_job(...)
+    def list_jobs(...) -> list
+    def get_job(...) -> dict
+    def delete_job(...)
+    def get_checkpoint() -> datetime
+    def set_checkpoint(...)
+
+# 所有 SQL、連線、事務在內部
+# ---
+class InMemoryJobRepository:   # 測試 adapter
+    # 同介面，純 dict 實作
+
+# 所有呼叫端只見到：
+repo = JobRepository(db_path)
+job_id = repo.create_job(...)
+repo.complete_job(job_id, ...)</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- CANDIDATE 2: Config -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div class="card p-6">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <span class="text-xs text-slate-500 font-mono">候選 #2</span>
+          <h2 class="text-slate-100 mt-0.5">Config 爆炸——參數傳遞鏈深化</h2>
+          <p class="text-xs text-slate-500 mt-1 font-mono">全部 7 個模組（每個都有 config_path 預設值）</p>
+        </div>
+        <span class="badge-strong text-xs px-3 py-1 rounded-full font-semibold">Strong</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5 text-sm">
+        <div>
+          <div class="sec-title mb-1">問題</div>
+          <p class="text-slate-400 text-xs leading-relaxed"><code class="text-sky-400">config_path: str = "/app/config/config.yaml"</code> 出現在 <strong class="text-slate-200">7 個函式簽名</strong>中，並在每次呼叫時重新讀取 YAML。<br><br><code class="text-sky-400">api.py</code> 在同一個請求內三次呼叫 <code>_load_config()</code>（Lines 57, 123, 149）。每個模組都有獨立的 <code>_load_config()</code> helper——7 個幾乎相同的私有函式。<br><br>這是最大的介面噪音：caller 必須知道 config 路徑才能呼叫任何業務函式。</p>
+        </div>
+        <div>
+          <div class="sec-title mb-1">解法</div>
+          <p class="text-slate-400 text-xs leading-relaxed">建立 <code class="text-sky-400">AppConfig</code>——一個 <strong class="text-slate-200">深模組</strong>，在 process 啟動時讀一次 YAML，之後透過 module-level singleton 或依賴注入取用。<br><br>所有業務函式的 <code>config_path</code> 參數消失，介面收縮。<br><br><code>AppConfig</code> 支援 <code>ELK_CONFIG</code> 環境變數覆蓋，無需重建 container。</p>
+        </div>
+        <div>
+          <div class="sec-title mb-1">效益</div>
+          <p class="text-slate-400 text-xs leading-relaxed"><strong class="text-emerald-400">槓桿</strong>：7 個呼叫端的簽名同時縮短。<br><br><strong class="text-emerald-400">局部性</strong>：config 讀取邏輯集中一處，含 fallback、validation、型別轉換。<br><br><strong class="text-emerald-400">測試</strong>：測試時直接建立 <code>AppConfig</code> 物件注入，不依賴磁碟 YAML。<br><br><strong class="text-emerald-400">效能</strong>：消除每次請求重讀 YAML 的 I/O。</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="before-box">
+          <div class="sec-title mb-2 text-purple-400">BEFORE — 介面噪音爆炸</div>
+          <pre class="code text-xs">extract(
+  query_from, query_to,
+  config_path="/app/config/config.yaml"  # ← noise
+)
+preprocess(
+  raw_logs, job_id, query_from, query_to,
+  config_path="/app/config/config.yaml"  # ← noise
+)
+analyse(
+  event_sequence, job_id,
+  config_path="/app/config/config.yaml"  # ← noise
+)
+build_report(
+  analysis, job_id, query_from, query_to,
+  config_path="/app/config/config.yaml"  # ← noise
+)
+
+# api.py 同一個請求讀三次 YAML
+_load_db_path()         # 讀 YAML
+_resolve_query_window() # 又讀 YAML
+_run_analysis_bg()      # 又讀 YAML</pre>
+        </div>
+        <div class="after-box">
+          <div class="sec-title mb-2 text-emerald-400">AFTER — 深模組 AppConfig</div>
+          <pre class="code text-xs"># config.py
+class AppConfig:
+    @classmethod
+    def load(cls, path=None) -> "AppConfig":
+        # path = ELK_CONFIG env var 或預設
+        ...
+
+    @property
+    def db_path(self) -> str: ...
+    @property
+    def es_config(self) -> dict: ...
+    @property
+    def field_mapping(self) -> dict: ...
+    @property
+    def bob_timeout(self) -> int: ...
+
+# 業務函式介面乾淨了：
+def extract(query_from, query_to, config: AppConfig)
+def preprocess(raw_logs, job_id, q_from, q_to, config: AppConfig)
+def analyse(event_sequence, job_id, config: AppConfig)
+def build_report(analysis, job_id, q_from, q_to, config: AppConfig)</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- CANDIDATE 3: Bob Bridge -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div class="card p-6">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <span class="text-xs text-slate-500 font-mono">候選 #3</span>
+          <h2 class="text-slate-100 mt-0.5">Bob Bridge 輸出解析脆弱性</h2>
+          <p class="text-xs text-slate-500 mt-1 font-mono">analyser/bob_bridge.py</p>
+        </div>
+        <span class="badge-worth text-xs px-3 py-1 rounded-full font-semibold">Worth exploring</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5 text-sm">
+        <div>
+          <div class="sec-title mb-1">問題</div>
+          <p class="text-slate-400 text-xs leading-relaxed"><code class="text-sky-400">_parse_bob_output()</code> 使用 <code>re.search(r'\{.*\}', stdout, re.DOTALL)</code> 搜尋第一個 JSON 物件，再用字串操作剝除 markdown fence。<br><br>這個解析邏輯與 Bob CLI 的輸出格式強耦合——一旦 Bob 更新格式（多了換行、多了包裝 key）就靜默失敗，回傳 <code>{"error": "...", "raw": stdout}</code>。<br><br>此外 subprocess 繼承整個 <code>os.environ</code>（Line 97），洩漏父程序所有環境變數。</p>
+        </div>
+        <div>
+          <div class="sec-title mb-1">解法</div>
+          <p class="text-slate-400 text-xs leading-relaxed">在 Bob Bridge 內建立一個<strong class="text-slate-200">深化的解析 seam</strong>：<code>BobOutputParser</code> 封裝所有解析策略（直接 JSON、markdown fence 包裝、last_message 提取），對外暴露單一 <code>parse(stdout: str) -> dict</code> 介面。<br><br>subprocess env 改為白名單傳遞（只傳 <code>BOB_API_KEY</code>、<code>HOME</code>、<code>PATH</code>），不繼承整個 <code>os.environ</code>。</p>
+        </div>
+        <div>
+          <div class="sec-title mb-1">效益</div>
+          <p class="text-slate-400 text-xs leading-relaxed"><strong class="text-emerald-400">局部性</strong>：Bob 輸出格式變動只改一處。<br><br><strong class="text-emerald-400">測試</strong>：可直接用各種 Bob stdout fixture 測試 parser，不需要跑實際 subprocess。<br><br><strong class="text-emerald-400">安全</strong>：縮小子程序環境變數暴露面。<br><br><strong class="text-amber-400">注意</strong>：ADR-0001 確認 subprocess 模式是刻意設計，本候選不改呼叫方式，只改解析與 env 傳遞。</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="before-box">
+          <div class="sec-title mb-2 text-purple-400">BEFORE — 脆弱的 inline 解析</div>
+          <pre class="code text-xs">def _parse_bob_output(stdout: str) -> dict:
+    # 嘗試 1：直接 json.loads
+    try:
+        data = json.loads(stdout)
+        last = data.get("messages", [])[-1]
+        content = last.get("content", "")
+    except:
+        content = stdout
+
+    # 嘗試 2：regex 找 {...}
+    m = re.search(r'\{.*\}', content, re.DOTALL)
+    if m:
+        raw = m.group(0)
+        # 嘗試 3：strip markdown fence
+        raw = re.sub(r'^```json\s*', '', raw)
+        raw = re.sub(r'\s*```$', '', raw)
+        return json.loads(raw)
+    
+    return {"error": "parse_failed", "raw": stdout[:2000]}
+
+# subprocess 繼承所有環境變數
+env = {**os.environ, "BOB_API_KEY": key}  # ← 洩漏全部 env</pre>
+        </div>
+        <div class="after-box">
+          <div class="sec-title mb-2 text-emerald-400">AFTER — 深化的 BobOutputParser</div>
+          <pre class="code text-xs">class BobOutputParser:
+    """唯一的解析 seam，可獨立測試。"""
+    
+    STRATEGIES = [
+        _try_direct_json,
+        _try_last_message_json,
+        _try_markdown_fence_json,
+        _try_regex_json,
+    ]
+    
+    def parse(self, stdout: str) -> dict:
+        for strategy in self.STRATEGIES:
+            result = strategy(stdout)
+            if result is not None:
+                return result
+        return {"error": "parse_failed", "raw": stdout[:2000]}
+
+# subprocess env 白名單
+SAFE_ENV_KEYS = {"HOME", "PATH", "USER", "TMPDIR"}
+env = {k: os.environ[k] for k in SAFE_ENV_KEYS if k in os.environ}
+env["BOB_API_KEY"] = bobshell_api_key</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- CANDIDATE 4: run_analysis shallow orchestrator -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div class="card p-6">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <span class="text-xs text-slate-500 font-mono">候選 #4</span>
+          <h2 class="text-slate-100 mt-0.5">run_analysis() 淺層編排器——DB 操作外滲</h2>
+          <p class="text-xs text-slate-500 mt-1 font-mono">analysis_pipeline.py</p>
+        </div>
+        <span class="badge-worth text-xs px-3 py-1 rounded-full font-semibold">Worth exploring</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5 text-sm">
+        <div>
+          <div class="sec-title mb-1">問題</div>
+          <p class="text-slate-400 text-xs leading-relaxed"><code class="text-sky-400">run_analysis()</code> 的 98 行函式體中，有 <strong>6 處直接 sqlite3 呼叫</strong>，混在業務流程的 try/except 裡。<br><br><code>_create_job()</code> 函式定義了但函式體內又重複寫了 job 建立邏輯（Line 106-116 vs 函式定義）。<br><br><code>_update_job()</code> 以 <code>WHERE rowid = last DESC LIMIT 1</code> 更新「最新的一筆」，而非以 <code>job_id</code> 更新——這是隱性的競態條件（concurrent jobs 時會更新錯誤的 job）。</p>
+        </div>
+        <div>
+          <div class="sec-title mb-1">解法</div>
+          <p class="text-slate-400 text-xs leading-relaxed">從 <code>_create_job()</code> 回傳 <code>job_id</code>（移除 <code>SELECT last_insert_rowid()</code> 反模式）。<br><br>所有 DB 操作移入 <code>JobRepository</code>（候選 #1 的結果）。<br><br><code>run_analysis()</code> 變成純業務編排：接受 repo adapter，呼叫 extract/preprocess/analyse/build_report，以 job_id 更新狀態。<br><br>整個函式可在沒有真實 DB 的情況下測試。</p>
+        </div>
+        <div>
+          <div class="sec-title mb-1">效益</div>
+          <p class="text-slate-400 text-xs leading-relaxed"><strong class="text-emerald-400">正確性</strong>：消除以 rowid DESC 定位最新 job 的競態條件。<br><br><strong class="text-emerald-400">局部性</strong>：DB 邏輯不再散落在業務流程中。<br><br><strong class="text-emerald-400">測試</strong>：pipeline 的整合測試只需 mock 四個 stage 函式和一個 repo adapter，不需要真實 ES 或 Bob。</p>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <div class="sec-title mb-2">競態條件說明</div>
+        <div class="mermaid text-xs">
+sequenceDiagram
+    participant J1 as Job-1 (async)
+    participant J2 as Job-2 (async)
+    participant DB as SQLite
+
+    J1->>DB: INSERT INTO analysis_jobs (job-1)
+    J2->>DB: INSERT INTO analysis_jobs (job-2)
+    Note over DB: rowid 2 = job-2 (最新)
+    J1->>DB: UPDATE WHERE rowid = SELECT MAX rowid
+    Note over J1,DB: ⚠️ 更新到 job-2 的紀錄！
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="before-box">
+          <div class="sec-title mb-2 text-purple-400">BEFORE — DB 外滲的編排器</div>
+          <pre class="code text-xs">def run_analysis(...):
+    conn = sqlite3.connect(db_path)  # ← DB 在業務邏輯中
+    _init_db(db_path)
+    
+    # 建立 job（重複！_create_job 函式存在但沒用）
+    conn.execute("INSERT INTO analysis_jobs ...")
+    conn.commit()
+    rowid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    
+    logs = extract(...)
+    events = preprocess(...)
+    analysis = analyse(...)
+    
+    # 更新 job（競態！）
+    conn.execute("UPDATE analysis_jobs SET ... WHERE rowid = (SELECT rowid ... ORDER BY rowid DESC LIMIT 1)")
+    
+    report = build_report(...)
+    write_checkpoint(db_path, ...)  # 又一次 DB 操作</pre>
+        </div>
+        <div class="after-box">
+          <div class="sec-title mb-2 text-emerald-400">AFTER — 純業務編排器</div>
+          <pre class="code text-xs">def run_analysis(
+    query_from, query_to,
+    trigger_mode="on_demand",
+    config: AppConfig = None,
+    repo: JobRepository = None,   # ← 注入 adapter
+):
+    config = config or AppConfig.load()
+    repo = repo or JobRepository(config.db_path)
+    
+    job_id = repo.create_job(trigger_mode, query_from, query_to)
+    
+    try:
+        logs = extract(query_from, query_to, config)
+        events = preprocess(logs, job_id, query_from, query_to, config)
+        analysis = analyse(events, job_id, config)
+        report = build_report(analysis, job_id, query_from, query_to, config)
+        repo.complete_job(job_id, analysis, report)  # ← 明確 job_id
+        repo.set_checkpoint(query_to)
+    except Exception as e:
+        repo.fail_job(job_id, str(e))
+    
+    return repo.get_job(job_id)</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- CANDIDATE 5: Preprocessor id() bug -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div class="card p-6">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <span class="text-xs text-slate-500 font-mono">候選 #5</span>
+          <h2 class="text-slate-100 mt-0.5">Preprocessor 使用 id() 追蹤物件識別——脆弱的分群邏輯</h2>
+          <p class="text-xs text-slate-500 mt-1 font-mono">analyser/preprocessor.py · Line 159</p>
+        </div>
+        <span class="badge-worth text-xs px-3 py-1 rounded-full font-semibold">Worth exploring</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5 text-sm">
+        <div>
+          <div class="sec-title mb-1">問題</div>
+          <p class="text-slate-400 text-xs leading-relaxed"><code class="text-sky-400">preprocess()</code> 先以 trace_id 分群，再對「未被 trace 涵蓋的事件」以時間視窗分群。<br><br>識別「已被 trace 涵蓋」使用 <code>id(ev)</code>（Python 物件記憶體位址）建立 <code>seen_ids: set</code>。<br><br>這在 CPython 下可行，但物件 id 可能被重用（若舊物件被 GC 而新物件分配在同一位址），且在其他 Python 實作（PyPy）下行為不同。這不是一個可測試的 seam——你不能從介面外部觀察到它用了 <code>id()</code>，但它確實是一個隱藏的錯誤點。</p>
+        </div>
+        <div>
+          <div class="sec-title mb-1">解法</div>
+          <p class="text-slate-400 text-xs leading-relaxed">改用 event 的業務識別欄位標記（如 <code>_grouped: bool</code>，或建立一個 <code>set</code> of event index / 業務 id）。<br><br>事件分群邏輯本身是純函式（無 I/O），已是一個好的 seam——只需修復識別方式，使其基於業務欄位而非記憶體位址。</p>
+        </div>
+        <div>
+          <div class="sec-title mb-1">效益</div>
+          <p class="text-slate-400 text-xs leading-relaxed"><strong class="text-emerald-400">正確性</strong>：消除潛在的物件 id 重用問題。<br><br><strong class="text-emerald-400">可移植性</strong>：不依賴 CPython 記憶體模型。<br><br><strong class="text-amber-400">代價小</strong>：這是最小的改動，3-5 行程式碼。</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="before-box">
+          <div class="sec-title mb-2 text-purple-400">BEFORE — 脆弱的 id() 追蹤</div>
+          <pre class="code text-xs">def preprocess(...):
+    trace_groups = _group_by_trace_id(events)
+    time_groups  = _group_by_time_window(events)
+    
+    seen_ids = set()  # ← CPython 物件記憶體位址
+    for trace_id, evs in trace_groups.items():
+        for ev in evs:
+            seen_ids.add(id(ev))  # ← 脆弱！
+    
+    ungrouped = [
+        ev for ev in events
+        if id(ev) not in seen_ids  # ← 脆弱！
+    ]
+    # ungrouped 進入時間視窗分群...</pre>
+        </div>
+        <div class="after-box">
+          <div class="sec-title mb-2 text-emerald-400">AFTER — 基於業務索引</div>
+          <pre class="code text-xs">def preprocess(...):
+    trace_groups = _group_by_trace_id(events)
+    
+    # 用 enumerate index 作為穩定識別
+    grouped_indices = {
+        i
+        for evs in trace_groups.values()
+        for i, ev in enumerate(events)
+        if ev in evs  # 或 ev["_idx"] 業務欄位
+    }
+    
+    ungrouped = [
+        ev for i, ev in enumerate(events)
+        if i not in grouped_indices
+    ]
+    # ungrouped 進入時間視窗分群...</pre>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end candidate cards -->
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- Top recommendation -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div class="card p-6 mt-8 border-sky-800">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-2 h-2 rounded-full bg-sky-400"></div>
+      <h2 class="text-sky-300 text-base">首選建議：候選 #1 + #2 聯合深化</h2>
+    </div>
+    <p class="text-slate-400 text-sm leading-relaxed mb-4">
+      <strong class="text-slate-200">候選 #1（DAL）</strong> 和 <strong class="text-slate-200">候選 #2（AppConfig）</strong> 是同一個問題的兩個維度：<em>資源（DB 連線、config 檔）散落在每個模組的實作裡</em>。兩者都通過刪除測試——刪掉散落的 sqlite3 呼叫和 _load_config() 副本，複雜度會在 20+ 個呼叫端重新出現。
+    </p>
+    <p class="text-slate-400 text-sm leading-relaxed mb-4">
+      先做 <strong class="text-sky-400">AppConfig</strong>（改動小，3-4 個小時），再做 <strong class="text-sky-400">JobRepository</strong>（改動大，需要同步改 api.py + cli.py + analysis_pipeline.py + extractor.py）。候選 #4（run_analysis 競態修復）可以在 JobRepository 完成後一起做，幾乎是免費的。
+    </p>
+    <div class="grid grid-cols-3 gap-4 text-xs text-center">
+      <div class="bg-slate-800 rounded-lg p-3">
+        <div class="text-slate-400 mb-1">改動範圍</div>
+        <div class="text-slate-200 font-semibold">7 個模組</div>
+      </div>
+      <div class="bg-slate-800 rounded-lg p-3">
+        <div class="text-slate-400 mb-1">預估工作量</div>
+        <div class="text-slate-200 font-semibold">1–2 天</div>
+      </div>
+      <div class="bg-slate-800 rounded-lg p-3">
+        <div class="text-slate-400 mb-1">測試收益</div>
+        <div class="text-slate-200 font-semibold">可離線測試整個 pipeline</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- footnote -->
+  <div class="mt-10 pt-4 border-t border-slate-800 text-center text-xs text-slate-600">
+    Made with IBM Bob
+  </div>
+</div><!-- end max-w-5xl -->
+
+<script>mermaid.initialize({startOnLoad:true,theme:'dark'});</script>
+</body>
+</html>

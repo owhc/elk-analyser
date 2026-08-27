@@ -1,0 +1,75 @@
+# Updated: 2026-08-27 17:20:49 +0800
+# ELK Analyser 主設定檔
+# 所有連線參數、欄位映射、排程設定均在此集中管理
+
+# ── Elasticsearch 連線設定 ──────────────────────────────────────────
+elasticsearch:
+  # 開發階段設為 mock，正式環境改為 remote
+  mode: mock                        # mock | local | remote
+  host: "localhost"
+  port: 9200
+  scheme: "http"                    # http | https
+  # 正式環境 TLS 設定（mode: remote 時啟用）
+  # ca_cert: "/certs/ca.crt"
+  # client_cert: "/certs/client.crt"
+  # client_key: "/certs/client.key"
+  username: ""
+  password: ""                      # 留空；正式環境請設定環境變數 ES_PASSWORD（AppConfig 會自動覆蓋）
+  index_pattern: "app-logs-*"       # 查詢目標索引 pattern
+  timeout: 30                       # 查詢逾時秒數
+
+# ── 欄位映射（對應不同 ELK schema）──────────────────────────────────
+field_mapping:
+  timestamp: "@timestamp"           # 時間欄位名稱
+  level: "log.level"                # 日誌等級欄位
+  message: "message"                # 訊息欄位
+  service: "service.name"           # 服務/模組名稱
+  trace_id: "trace.id"              # Trace ID（用於事件分組）
+  host: "host.name"                 # 主機名稱
+  # 若欄位不存在則自動 fallback，無需修改程式碼
+
+# ── 日誌過濾設定 ────────────────────────────────────────────────────
+filter:
+  # 只分析這些等級的日誌（大小寫不敏感）
+  levels:
+    - ERROR
+    - FATAL
+    - CRITICAL
+  # 額外關鍵字過濾（空陣列表示不過濾）
+  keywords: []
+  # 每次查詢最多回傳筆數（防止資料量過大）
+  max_hits: 5000
+
+# ── Bob CLI 設定（直接在本 container 執行，無需 SSH）────────────────
+bob_bridge:
+  workspace_path: "/workspace"      # 事件序列 JSON 暫存目錄
+  logs_subdir: "logs"               # workspace 下的子目錄
+  mode: "log-analyst"               # Bob CLI custom mode slug
+  timeout: 120                      # bob run 逾時秒數（F-03：已移除廢棄的 report_timeout）
+
+# ── 報告設定 ────────────────────────────────────────────────────────
+report:
+  output_dir: "/reports"            # PPTX 輸出目錄
+  # 報告檔名格式：report_YYYYMMDD_HHMMSS.pptx
+  filename_prefix: "elk_analysis"
+
+# ── Checkpoint 設定 ─────────────────────────────────────────────────
+checkpoint:
+  # Kibana Alert 不帶時間觸發，且 Checkpoint 為空時的預設回溯分鐘數
+  default_lookback_minutes: 60
+
+# ── 持久化設定 ──────────────────────────────────────────────────────
+database:
+  path: "/db/history.db"            # SQLite 資料庫路徑
+
+# ── REST API 設定 ───────────────────────────────────────────────────
+api:
+  host: "0.0.0.0"
+  port: 8080
+
+# ── Webhook 通知（選用）────────────────────────────────────────────
+webhook:
+  enabled: false
+  url: ""                           # 例：https://hooks.slack.com/...
+  # on_complete: true
+  # on_error: true

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"/>
+<meta name="updated" content="2026-08-26 23:59:00 +0800"/>
+<title>ELK Analyser — Container 架構圖</title>
+<style>
+:root{
+  --bg:#07111f;--surface:#0d1e33;--border:#1a3050;
+  --es:#f59e0b;--an:#38bdf8;--bob:#f59e0b;--vol:#a78bfa;--kb:#fb923c;--web:#34d399;
+  --txt:#e2eaf4;--muted:#4a6080;--dim:#2a4060;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--txt);font-family:'SF Mono',ui-monospace,'Cascadia Code',monospace;padding:32px 28px;font-size:12px;line-height:1.5;min-width:960px;}
+
+.hd{display:flex;align-items:baseline;gap:12px;margin-bottom:4px;}
+h1{font-size:1.1rem;font-weight:700;letter-spacing:-.01em;}
+.badge{font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:2px 7px;border-radius:3px;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--an);}
+.sub{color:var(--muted);font-size:.68rem;margin-bottom:22px;}
+
+/* meta chips */
+.meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.chip{font-size:.6rem;padding:3px 9px;border-radius:4px;background:var(--surface);border:1px solid var(--border);color:var(--muted);}
+.chip b{margin-right:4px;}
+.chip.kb{border-color:rgba(251,146,60,.4);color:var(--kb);}
+.chip.ext{border-color:rgba(245,158,11,.4);color:var(--es);}
+
+/* ── external services bar ── */
+.ext-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+.ext-svc{display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:7px;border:1px dashed;}
+.ext-svc.kb-svc{background:rgba(251,146,60,.06);border-color:rgba(251,146,60,.35);}
+.ext-svc.es-svc{background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.3);}
+.ext-icon{font-size:.65rem;font-weight:700;display:flex;align-items:center;gap:5px;white-space:nowrap;}
+.ext-icon::before{content:'';width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.kb-svc .ext-icon{color:var(--kb);}.kb-svc .ext-icon::before{background:var(--kb);animation:blink 2s infinite;}
+.es-svc .ext-icon{color:var(--es);}.es-svc .ext-icon::before{background:var(--es);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.ext-desc{font-size:.6rem;color:var(--muted);}
+.ext-arrow{display:flex;align-items:center;gap:0;width:50px;flex-shrink:0;}
+.ext-arrow .line{height:2px;flex:1;}
+.ext-arrow .head{border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:6px solid currentColor;}
+.pill{font-size:.59rem;padding:2px 7px;border-radius:3px;white-space:nowrap;}
+.pill-kb{background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.35);color:var(--kb);}
+.pill-es{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--es);}
+
+/* network wrapper */
+.net{position:relative;border:1.5px dashed rgba(56,189,248,.2);border-radius:12px;padding:22px 18px 18px;background:rgba(7,17,31,.6);}
+.net-lbl{position:absolute;top:-9px;left:16px;background:var(--bg);padding:0 8px;font-size:.6rem;font-weight:700;color:rgba(56,189,248,.5);letter-spacing:.1em;}
+
+/* two-container grid */
+.ct-grid{display:grid;grid-template-columns:1fr 80px 1fr;align-items:stretch;gap:0;}
+
+/* container box */
+.ct{border-radius:8px;padding:14px;}
+.ct-tag{font-size:.55rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;}
+.ct-name{font-size:.95rem;font-weight:700;}
+.ct-img{font-size:.58rem;color:var(--muted);margin-top:1px;}
+.section{margin-top:10px;}
+.section-title{font-size:.55rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px;}
+.mrow{display:flex;align-items:flex-start;gap:5px;margin-bottom:5px;}
+.mdot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.mname{font-size:.67rem;font-weight:600;line-height:1.3;}
+.msub{font-size:.57rem;color:var(--muted);}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;}
+.tag{font-size:.58rem;padding:2px 6px;border-radius:3px;}
+
+/* web container */
+.ct-web{background:rgba(52,211,153,.05);border:1.5px solid rgba(52,211,153,.3);}
+.ct-web .ct-tag{color:var(--web);}
+.ct-web .ct-name{color:var(--web);}
+.ct-web .section-title{color:rgba(52,211,153,.45);}
+.ct-web .tag{background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.2);color:var(--web);}
+
+/* analyser container */
+.ct-an{background:rgba(56,189,248,.05);border:1.5px solid rgba(56,189,248,.3);}
+.ct-an .ct-tag{color:var(--an);}
+.ct-an .ct-name{color:var(--an);}
+.ct-an .section-title{color:rgba(56,189,248,.45);}
+.ct-an .tag{background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.2);color:var(--an);}
+
+/* arrow column */
+.arr-col{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:14px;padding:0 6px;}
+.ap{display:flex;flex-direction:column;align-items:center;gap:3px;width:100%;}
+.ap-lbl{font-size:.55rem;color:var(--muted);text-align:center;white-space:nowrap;}
+.farr,.rarr{display:flex;align-items:center;width:100%;}
+.farr .fl,.rarr .rl{height:2px;flex:1;background:currentColor;}
+.rarr .rl{height:0;border-top:2px dashed currentColor;}
+.farr .fh{border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:6px solid currentColor;}
+.rarr .rh{border-top:4px solid transparent;border-bottom:4px solid transparent;border-right:6px solid currentColor;}
+
+/* volumes */
+.vol-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--dim);}
+.vol-lbl{font-size:.6rem;font-weight:700;color:var(--vol);align-self:center;white-space:nowrap;margin-right:2px;}
+.vol{background:var(--surface);border:1px solid rgba(167,139,250,.25);border-radius:5px;padding:6px 9px;}
+.vol-name{font-size:.62rem;font-weight:600;color:var(--vol);}
+.vol-desc{font-size:.57rem;color:var(--muted);line-height:1.4;}
+
+/* trigger strip */
+.trig-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--dim);align-items:center;}
+.trig-lbl{font-size:.6rem;font-weight:700;color:var(--an);white-space:nowrap;margin-right:2px;}
+.trig{background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:5px 9px;}
+.trig.primary{border-color:rgba(251,146,60,.45);}
+.trig-name{font-size:.62rem;font-weight:600;color:var(--txt);}
+.trig.primary .trig-name{color:var(--kb);}
+.trig-desc{font-size:.56rem;color:var(--muted);line-height:1.4;}
+
+/* cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:18px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:12px;}
+.card-hd{display:flex;align-items:center;gap:6px;margin-bottom:7px;}
+.cdot{width:6px;height:6px;border-radius:50%;}
+.card h3{font-size:.72rem;font-weight:600;}
+.card li{font-size:.62rem;color:var(--muted);line-height:1.65;list-style:none;padding-left:10px;position:relative;}
+.card li::before{content:'›';position:absolute;left:0;color:var(--dim);}
+
+footer{text-align:center;margin-top:16px;color:var(--dim);font-size:.6rem;border-top:1px solid var(--dim);padding-top:10px;}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <h1>ELK Analyser</h1>
+  <span class="badge">Container 架構圖</span>
+</div>
+<p class="sub">Podman Network 視角 · elk-analyser-network · web + elk-analyser 兩個 Container</p>
+
+<div class="meta">
+  <div class="chip"><b>web</b>:3001 → Nginx 靜態前端 + API proxy</div>
+  <div class="chip"><b>elk-analyser</b>:8080 → FastAPI + Bob CLI</div>
+  <div class="chip"><b>Volumes</b>bob_workspace · elk_reports · elk_db</div>
+  <div class="chip"><b>image</b>node:22-slim（Bob CLI 需要 Node.js）</div>
+</div>
+
+<!-- External services（network 外部） -->
+<div class="ext-bar">
+  <div class="ext-svc kb-svc">
+    <div class="ext-icon">Kibana Alerting（外部）</div>
+    <div class="ext-desc">Alert Rule 條件成立</div>
+    <div class="ext-arrow" style="color:var(--kb)"><div class="line"></div><div class="head"></div></div>
+    <div class="pill pill-kb">POST :8080/analyse</div>
+    <div class="ext-desc">to_time + lookback_minutes</div>
+  </div>
+  <div class="ext-svc es-svc">
+    <div class="ext-icon">Elasticsearch（外部）</div>
+    <div class="ext-desc">企業既有 ELK 叢集</div>
+    <div class="ext-arrow" style="color:var(--es)"><div class="line"></div><div class="head"></div></div>
+    <div class="pill pill-es">REST API :9200</div>
+    <div class="ext-desc">config.yaml 設定連線</div>
+  </div>
+</div>
+
+<!-- Network boundary -->
+<div class="net">
+  <div class="net-lbl">🌐 elk-analyser-network (bridge · 10.89.1.0/24)</div>
+
+  <div class="ct-grid">
+
+    <!-- web container -->
+    <div class="ct ct-web">
+      <div class="ct-tag">Container</div>
+      <div class="ct-name">elk-analyser-web</div>
+      <div class="ct-img">nginx:alpine · port 3001:80</div>
+      <div class="section">
+        <div class="section-title">角色</div>
+        <div class="mrow"><div class="mdot" style="background:var(--web)"></div><div><div class="mname">靜態前端</div><div class="msub">index.html — Web UI 操作介面</div></div></div>
+        <div class="mrow"><div class="mdot" style="background:var(--web)"></div><div><div class="mname">API Proxy</div><div class="msub">/api/* → http://elk-analyser:8080/</div></div></div>
+        <div class="mrow"><div class="mdot" style="background:var(--web)"></div><div><div class="mname">proxy_read_timeout</div><div class="msub">600s（分析最長約 5 分鐘）</div></div></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Ports</div>
+        <div class="tags">
+          <span class="tag">宿主機 :3001 → 容器 :80</span>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">依賴</div>
+        <div class="tags">
+          <span class="tag">depends_on: elk-analyser</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Arrows: web ↔ elk-analyser -->
+    <div class="arr-col">
+      <div class="ap">
+        <div class="farr" style="color:var(--an)"><div class="fl"></div><div class="fh"></div></div>
+        <div class="ap-lbl">API 請求</div>
+      </div>
+      <div class="ap">
+        <div class="rarr" style="color:var(--an)"><div class="rh"></div><div class="rl"></div></div>
+        <div class="ap-lbl">JSON 回應</div>
+      </div>
+    </div>
+
+    <!-- elk-analyser container -->
+    <div class="ct ct-an">
+      <div class="ct-tag">Container · 本專案核心</div>
+      <div class="ct-name">elk-analyser</div>
+      <div class="ct-img">node:22-slim + Python 3 · FastAPI 10.89.1.10:8080</div>
+      <div class="section">
+        <div class="section-title">模組</div>
+        <div class="mrow"><div class="mdot" style="background:var(--an)"></div><div><div class="mname">api.py</div><div class="msub">FastAPI · POST /analyse · GET /jobs</div></div></div>
+        <div class="mrow"><div class="mdot" style="background:var(--an)"></div><div><div class="mname">extractor.py</div><div class="msub">外部 ES 查詢 + Checkpoint 讀寫</div></div></div>
+        <div class="mrow"><div class="mdot" style="background:var(--an)"></div><div><div class="mname">preprocessor.py</div><div class="msub">事件序列建構（Trace ID / 時間窗口）</div></div></div>
+        <div class="mrow"><div class="mdot" style="background:var(--an)"></div><div><div class="mname">bob_bridge.py</div><div class="msub">subprocess → bob CLI（本機直接呼叫）</div></div></div>
+        <div class="mrow"><div class="mdot" style="background:var(--bob)"></div><div><div class="mname" style="color:var(--bob)">Bob CLI（內建）</div><div class="msub">log-analyst mode · AI 因果鏈推理</div></div></div>
+        <div class="mrow"><div class="mdot" style="background:var(--an)"></div><div><div class="mname">report_builder.py</div><div class="msub">python-pptx 診斷報告生成</div></div></div>
+        <div class="mrow"><div class="mdot" style="background:var(--an)"></div><div><div class="mname">cli.py</div><div class="msub">click CLI · run / history / show</div></div></div>
+      </div>
+      <div class="section">
+        <div class="section-title">固定 IP</div>
+        <div class="tags"><span class="tag">10.89.1.10（避免 Nginx DNS 快取失效）</span></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Volumes</div>
+        <div class="tags">
+          <span class="tag">bob_workspace (rw)</span>
+          <span class="tag">elk_reports (rw)</span>
+          <span class="tag">elk_db (rw)</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Volumes -->
+  <div class="vol-row">
+    <div class="vol-lbl">Volumes</div>
+    <div class="vol"><div class="vol-name">bob_workspace</div><div class="vol-desc">elk-analyser (rw)<br>bob_bridge 事件序列 JSON 暫存</div></div>
+    <div class="vol"><div class="vol-name">elk_reports</div><div class="vol-desc">elk-analyser (rw)<br>PPTX 診斷報告輸出目錄</div></div>
+    <div class="vol"><div class="vol-name">elk_db</div><div class="vol-desc">elk-analyser (rw)<br>SQLite — analysis_jobs + checkpoint</div></div>
+  </div>
+
+  <!-- Trigger strip -->
+  <div class="trig-row">
+    <div class="trig-lbl">觸發來源</div>
+    <div class="trig primary">
+      <div class="trig-name">Kibana Alert（主要）</div>
+      <div class="trig-desc">Webhook → :8080/analyse<br>to_time + lookback_minutes</div>
+    </div>
+    <div class="trig">
+      <div class="trig-name">Web UI</div>
+      <div class="trig-desc">:3001 → Nginx proxy<br>from_time + to_time</div>
+    </div>
+    <div class="trig">
+      <div class="trig-name">CLI</div>
+      <div class="trig-desc">podman exec elk-analyser<br>python cli.py run</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-hd"><div class="cdot" style="background:var(--an)"></div><h3>啟動流程</h3></div>
+    <ul>
+      <li>podman-compose up → web（Nginx）+ elk-analyser（FastAPI）啟動</li>
+      <li>無排程程序，等待 Kibana Alert Webhook / 手動觸發</li>
+      <li>from_time 優先序：from_time → lookback_minutes → Checkpoint → fallback</li>
+      <li>GET /jobs 查詢歷史，GET /jobs/{id}/report 下載報告</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-hd"><div class="cdot" style="background:var(--bob)"></div><h3>Bob CLI（本機執行）</h3></div>
+    <ul>
+      <li>node:22-slim 基底，Bob CLI 直接安裝於 elk-analyser container</li>
+      <li>bob_bridge.py 以 subprocess.run 直接呼叫</li>
+      <li>事件序列寫入 bob_workspace/logs/job-{id}.json</li>
+      <li>bob run --mode log-analyst @file → 解析 last_message</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-hd"><div class="cdot" style="background:var(--vol)"></div><h3>Volume 設計</h3></div>
+    <ul>
+      <li>bob_workspace：bob_bridge 暫存 JSON，分析後刪除</li>
+      <li>elk_reports：PPTX 落地，API /jobs/{id}/report 可下載</li>
+      <li>elk_db：SQLite 單寫者，container 重建資料保留</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-hd"><div class="cdot" style="background:var(--es)"></div><h3>外部 Elasticsearch</h3></div>
+    <ul>
+      <li>不在 compose 內，為企業既有 ELK 叢集</li>
+      <li>config.yaml elasticsearch.mode 切換 mock / local / remote</li>
+      <li>開發階段用 mock/sample_logs.json 不需連外</li>
+      <li>field_mapping 可配置，不綁定特定 ELK schema</li>
+    </ul>
+  </div>
+</div>
+
+<footer>ELK Analyser · Container Architecture · elk-analyser-network · Made with IBM Bob</footer>
+</body>
+</html>

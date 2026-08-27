@@ -1,0 +1,78 @@
+# Updated: 2026-08-26 18:02:32 +0800
+# podman-compose.yml
+# elk-analyser 專案獨立網路（elk-analyser-network）
+#
+# 使用方式：
+#   podman-compose -f podman-compose.yml up -d
+#
+# 觸發分析方式：Web UI / 手動 CLI / Elasticsearch Alert → POST /analyse
+
+services:
+  # ── Web UI（Nginx 靜態前端 + API proxy）────────────────────────
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: elk-analyser-web
+    ports:
+      - "3001:80"         # 瀏覽器開啟 http://localhost:3001
+    networks:
+      - elk-analyser-network
+    restart: unless-stopped
+    depends_on:
+      - elk-analyser
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  elk-analyser:
+    build:
+      context: ./bob-analyser
+      dockerfile: Dockerfile
+    container_name: elk-analyser
+    ports:
+      - "8080:8080"       # FastAPI REST API
+    volumes:
+      # 與 bob-sandbox 共享：事件序列 JSON 傳遞媒介
+      # 使用與 ai-sdlc-flow 相同的 named volume
+      - bob_workspace:/workspace
+      # PPTX 報告輸出目錄
+      - elk_reports:/reports
+      # SQLite 持久化（僅本 container）
+      - elk_db:/db
+    environment:
+      - BOBSHELL_API_KEY=${BOBSHELL_API_KEY:-${BOB_API_KEY}}
+      - BOB_API_KEY=${BOB_API_KEY:-${BOBSHELL_API_KEY}}
+      - TZ=Asia/Taipei
+    env_file:
+      - ./bob-analyser/.env
+    networks:
+      elk-analyser-network:
+        ipv4_address: 10.89.1.10   # 固定 IP，避免 restart 後 Nginx DNS 快取失效
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+# ── 網路：elk-analyser 專案自有網路 ──────────────────────────────────
+networks:
+  elk-analyser-network:
+    name: elk-analyser-network
+    ipam:
+      config:
+        - subnet: 10.89.1.0/24
+
+# ── Volumes：全部由 podman-compose 自動建立與管理 ────────────────────
+volumes:
+  bob_workspace:
+    name: bob_workspace
+  elk_reports:
+    name: elk_reports
+  elk_db:
+    name: elk_db

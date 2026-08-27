@@ -1,0 +1,250 @@
+[
+  {
+    "@timestamp": "2025-01-15T08:00:05+00:00",
+    "log.level": "ERROR",
+    "service.name": "db2-server",
+    "host.name": "db2-prod-01",
+    "trace.id": "TRC-DB2-001",
+    "message": "SQLCODE=-1218 SQLSTATE=57011: DB2 connection pool exhausted. Max connections=200 reached. Waiting queue=145."
+  },
+  {
+    "@timestamp": "2025-01-15T08:00:20+00:00",
+    "log.level": "ERROR",
+    "service.name": "db2-server",
+    "host.name": "db2-prod-01",
+    "trace.id": "TRC-DB2-001",
+    "message": "DBI1039E: Database connection refused. Active connections=200/200. New requests are being rejected."
+  },
+  {
+    "@timestamp": "2025-01-15T08:00:35+00:00",
+    "log.level": "CRITICAL",
+    "service.name": "db2-server",
+    "host.name": "db2-prod-01",
+    "trace.id": "TRC-DB2-001",
+    "message": "DB2 SEVERE: Deadlock detected on table ORDERS. SQLCODE=-911. Rolling back transaction TXN-4821."
+  },
+  {
+    "@timestamp": "2025-01-15T08:01:10+00:00",
+    "log.level": "ERROR",
+    "service.name": "was-order-svc",
+    "host.name": "was-prod-01",
+    "trace.id": "TRC-DB2-001",
+    "message": "SRVE0777E: javax.resource.ResourceException: Unable to obtain a JDBC connection. Pool exhausted after 30000ms timeout. Application: order-processing-ear"
+  },
+  {
+    "@timestamp": "2025-01-15T08:01:25+00:00",
+    "log.level": "FATAL",
+    "service.name": "was-order-svc",
+    "host.name": "was-prod-01",
+    "trace.id": "TRC-DB2-001",
+    "message": "WSVR0501E: Error creating component com.example.order.OrderProcessor. Root cause: Cannot get a connection, pool error Timeout waiting for connection from pool"
+  },
+  {
+    "@timestamp": "2025-01-15T08:01:45+00:00",
+    "log.level": "ERROR",
+    "service.name": "was-order-svc",
+    "host.name": "was-prod-01",
+    "trace.id": "TRC-DB2-001",
+    "message": "TRAS0017I: Transaction rolled back due to FFDC: java.sql.SQLException: DB2 SQL Error: SQLCODE=-1218, SQLSTATE=57011. OrderID=ORD-20250115-8821"
+  },
+  {
+    "@timestamp": "2025-01-15T08:02:05+00:00",
+    "log.level": "ERROR",
+    "service.name": "mq-manager",
+    "host.name": "mq-prod-01",
+    "trace.id": "TRC-DB2-001",
+    "message": "AMQ9208E: Error on channel 'ORDER.CHANNEL'. Channel is closing. MQRC=2009 (MQRC_CONNECTION_BROKEN). Channel will retry after 5 seconds."
+  },
+  {
+    "@timestamp": "2025-01-15T08:02:30+00:00",
+    "log.level": "ERROR",
+    "service.name": "mq-manager",
+    "host.name": "mq-prod-01",
+    "trace.id": "TRC-DB2-001",
+    "message": "AMQ4038E: IBM MQ queue 'ORDER.INPUT.QUEUE' is full. Current depth=50000/50000. Messages being rejected from producer."
+  },
+  {
+    "@timestamp": "2025-01-15T08:03:00+00:00",
+    "log.level": "CRITICAL",
+    "service.name": "mq-manager",
+    "host.name": "mq-prod-01",
+    "trace.id": "TRC-DB2-001",
+    "message": "AMQ8004E: IBM MQ queue manager MQPROD01 unable to process messages. Dead letter queue depth=12450. Immediate intervention required."
+  },
+  {
+    "@timestamp": "2025-01-15T08:03:20+00:00",
+    "log.level": "FATAL",
+    "service.name": "was-order-svc",
+    "host.name": "was-prod-01",
+    "trace.id": "TRC-DB2-001",
+    "message": "WSVR0601E: WebSphere Application Server entering STOPPED state. All order processing halted. JVM heap utilization: 98.7% (3891MB/3940MB). OutOfMemoryError imminent."
+  },
+  {
+    "@timestamp": "2025-01-15T08:10:00+00:00",
+    "log.level": "ERROR",
+    "service.name": "was-inventory-svc",
+    "host.name": "was-prod-02",
+    "trace.id": "TRC-WAS-002",
+    "message": "JVMJ9VM015W: SystemOutOfMemory. Application has allocated 2.1GB. GC overhead limit exceeded. JVM flags: -Xmx4g -Xms2g"
+  },
+  {
+    "@timestamp": "2025-01-15T08:10:30+00:00",
+    "log.level": "ERROR",
+    "service.name": "was-inventory-svc",
+    "host.name": "was-prod-02",
+    "trace.id": "TRC-WAS-002",
+    "message": "TRAS0015I: FFDC - Exception: java.lang.OutOfMemoryError: Java heap space. Package: com.example.inventory.cache.CacheManager.loadAll. ThreadId: 00000082"
+  },
+  {
+    "@timestamp": "2025-01-15T08:11:00+00:00",
+    "log.level": "ERROR",
+    "service.name": "was-inventory-svc",
+    "host.name": "was-prod-02",
+    "trace.id": "TRC-WAS-002",
+    "message": "WSVR0024E: Application InventoryApp has exceeded JVM heap threshold (85%). Full GC triggered. Response time degraded: avg=8500ms (normal: 200ms)"
+  },
+  {
+    "@timestamp": "2025-01-15T08:11:45+00:00",
+    "log.level": "CRITICAL",
+    "service.name": "was-inventory-svc",
+    "host.name": "was-prod-02",
+    "trace.id": "TRC-WAS-002",
+    "message": "WSVR0605E: EJB method timeout. ejb/InventorySessionBean.getStockLevel() exceeded 30000ms. Thread dump initiated."
+  },
+  {
+    "@timestamp": "2025-01-15T08:12:15+00:00",
+    "log.level": "ERROR",
+    "service.name": "db2-server",
+    "host.name": "db2-prod-01",
+    "trace.id": "TRC-WAS-002",
+    "message": "SQL20542N: Long-running query detected. Query running for 285 seconds. APPNAME=InventoryApp. Statement: SELECT * FROM INVENTORY WHERE STATUS='ACTIVE' (rows scanned: 2.3M)"
+  },
+  {
+    "@timestamp": "2025-01-15T08:12:45+00:00",
+    "log.level": "FATAL",
+    "service.name": "was-inventory-svc",
+    "host.name": "was-prod-02",
+    "trace.id": "TRC-WAS-002",
+    "message": "JVMXE010: JVM requested operating system signal. Heap dump generated: /tmp/heapdump.20250115.120000.phd. Process will restart."
+  },
+  {
+    "@timestamp": "2025-01-15T08:13:05+00:00",
+    "log.level": "ERROR",
+    "service.name": "mq-manager",
+    "host.name": "mq-prod-01",
+    "trace.id": "TRC-WAS-002",
+    "message": "AMQ9503E: Channel 'INVENTORY.REQUEST' partner application stopped abnormally. MQRC=2009. Unprocessed messages: 3421"
+  },
+  {
+    "@timestamp": "2025-01-15T08:20:00+00:00",
+    "log.level": "ERROR",
+    "service.name": "mq-manager",
+    "host.name": "mq-prod-02",
+    "trace.id": "TRC-MQ-003",
+    "message": "AMQ9641E: Remote channel 'REMOTE.PAYMENT.CHANNEL' did not respond to a keepalive. SSL/TLS handshake failed: Certificate expired at 2025-01-15T00:00:00Z. CN=mq-prod-02.example.com"
+  },
+  {
+    "@timestamp": "2025-01-15T08:20:15+00:00",
+    "log.level": "ERROR",
+    "service.name": "mq-manager",
+    "host.name": "mq-prod-02",
+    "trace.id": "TRC-MQ-003",
+    "message": "AMQ9208E: Error on channel 'REMOTE.PAYMENT.CHANNEL'. MQRC=2381 (MQRC_SSL_CERTIFICATE_REVOCATION_STATUS_CHECK_FAILED). Channel disabled."
+  },
+  {
+    "@timestamp": "2025-01-15T08:20:40+00:00",
+    "log.level": "CRITICAL",
+    "service.name": "mq-manager",
+    "host.name": "mq-prod-02",
+    "trace.id": "TRC-MQ-003",
+    "message": "AMQ4042E: Dead letter queue 'PAYMENT.DLQ' reached 80% capacity (40000/50000). Messages from PAYMENT.INPUT.QUEUE being rerouted to DLQ due to delivery failure."
+  },
+  {
+    "@timestamp": "2025-01-15T08:21:05+00:00",
+    "log.level": "ERROR",
+    "service.name": "was-payment-svc",
+    "host.name": "was-prod-03",
+    "trace.id": "TRC-MQ-003",
+    "message": "SRVE0315E: JMS connection factory lookup failed. MQ host=mq-prod-02:1415. JMSException: MQJMS2005: Failed to create MQQueueManager for 'MQPROD02'. Linked: JMSCMQ0001 MQ RC=2381"
+  },
+  {
+    "@timestamp": "2025-01-15T08:21:30+00:00",
+    "log.level": "FATAL",
+    "service.name": "was-payment-svc",
+    "host.name": "was-prod-03",
+    "trace.id": "TRC-MQ-003",
+    "message": "WSVR0501E: Payment processing service unavailable. All outbound payment messages queued locally (10234 messages). Disk usage: /var/spool/payment=94%. Risk of data loss."
+  },
+  {
+    "@timestamp": "2025-01-15T08:22:00+00:00",
+    "log.level": "ERROR",
+    "service.name": "db2-server",
+    "host.name": "db2-prod-01",
+    "trace.id": "TRC-MQ-003",
+    "message": "SQL0911N: Reason code 68. PAYMENT_TRANSACTIONS table deadlock. Uncommitted transactions from was-payment-svc piling up. Lock wait timeout exceeded."
+  },
+  {
+    "@timestamp": "2025-01-15T08:22:30+00:00",
+    "log.level": "CRITICAL",
+    "service.name": "was-payment-svc",
+    "host.name": "was-prod-03",
+    "trace.id": "TRC-MQ-003",
+    "message": "JVMJ9GC025I: Excessive GC activity. Payment service JVM spending >60% time in GC. Heap: 3820MB/4096MB. Application throughput: 3.2% (normal: 100%). SLA breach."
+  },
+  {
+    "@timestamp": "2025-01-15T08:35:00+00:00",
+    "log.level": "ERROR",
+    "service.name": "db2-server",
+    "host.name": "db2-prod-01",
+    "trace.id": "TRC-DB2-004",
+    "message": "ADM1823E: The active log is full and is held by application handle=182. Log path: /db2log/NODE0000/LOGSTREAM0000. Available log space=0KB."
+  },
+  {
+    "@timestamp": "2025-01-15T08:35:20+00:00",
+    "log.level": "CRITICAL",
+    "service.name": "db2-server",
+    "host.name": "db2-prod-01",
+    "trace.id": "TRC-DB2-004",
+    "message": "SQL0964C: The transaction log for the database is full. SQLSTATE=57011. All write transactions are being rolled back. Read-only access only."
+  },
+  {
+    "@timestamp": "2025-01-15T08:35:45+00:00",
+    "log.level": "ERROR",
+    "service.name": "was-order-svc",
+    "host.name": "was-prod-01",
+    "trace.id": "TRC-DB2-004",
+    "message": "TRAS0017I: FFDC Exception chain: SQLCODE=-964 [DB2 log full] -> ResourceException [connection pool] -> EJBException [OrderService.createOrder()]. 8823 orders failed in last 5 minutes."
+  },
+  {
+    "@timestamp": "2025-01-15T08:36:10+00:00",
+    "log.level": "ERROR",
+    "service.name": "mq-manager",
+    "host.name": "mq-prod-01",
+    "trace.id": "TRC-DB2-004",
+    "message": "AMQ7472E: Log extent file not available. MQPROD01 queue manager log disk /mqlog: 99.8% utilized (499.9GB/500GB). Queue manager operations suspended."
+  },
+  {
+    "@timestamp": "2025-01-15T08:36:30+00:00",
+    "log.level": "FATAL",
+    "service.name": "db2-server",
+    "host.name": "db2-prod-01",
+    "trace.id": "TRC-DB2-004",
+    "message": "DB2 DATABASE IS SUSPENDED: All applications are in a wait state. Contact DB2 administrator immediately. Affected databases: PRODDB, ORDERDB, AUDITDB"
+  },
+  {
+    "@timestamp": "2025-01-15T08:37:00+00:00",
+    "log.level": "FATAL",
+    "service.name": "was-order-svc",
+    "host.name": "was-prod-01",
+    "trace.id": "TRC-DB2-004",
+    "message": "WSVR0601E: WebSphere cluster member was-prod-01 removed from cluster ORDERSVC_CLUSTER. Failover triggered to was-prod-02. Active sessions: 4821 (transferred)."
+  },
+  {
+    "@timestamp": "2025-01-15T08:37:20+00:00",
+    "log.level": "CRITICAL",
+    "service.name": "mq-manager",
+    "host.name": "mq-prod-01",
+    "trace.id": "TRC-DB2-004",
+    "message": "AMQ8004E: Queue manager MQPROD01 ending immediately (controlled shutdown failed). Queue depth at shutdown: ORDER.INPUT=48290, PAYMENT.INPUT=21840, INVENTORY.INPUT=9321."
+  }
+]
