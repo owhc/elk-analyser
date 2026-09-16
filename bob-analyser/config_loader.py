@@ -1,4 +1,4 @@
-# Updated: 2026-08-27 17:20:49 +0800
+# Updated: 2026-09-15 19:58:12 +0800
 """
 config_loader.py
 ────────────────
@@ -131,6 +131,21 @@ class AppConfig:
     @property
     def api_port(self) -> int:
         return int(self._raw.get("api", {}).get("port", 8080))
+
+    # ── Instana ───────────────────────────────────────────────────────
+
+    @property
+    def instana_config(self) -> dict:
+        """回傳 Instana 整合設定，api_token 以環境變數 INSTANA_API_TOKEN 覆蓋。"""
+        cfg = dict(self._raw.get("instana", {}))
+        env_token = os.environ.get("INSTANA_API_TOKEN")
+        if env_token:
+            cfg["api_token"] = env_token
+        return cfg
+
+    @property
+    def instana_enabled(self) -> bool:
+        return bool(self.instana_config.get("enabled", False))
 
     # ── 原始 dict（向後相容，逐步移除）──────────────────────────────
 

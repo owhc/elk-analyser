@@ -1,4 +1,4 @@
-# Updated: 2026-08-27 18:08:17 +0800
+# Updated: 2026-09-16 08:38:10 +0800
 """
 db/job_repository.py
 ─────────────────────
@@ -161,7 +161,7 @@ class JobRepository:
         conn = self._conn()
         try:
             row = conn.execute(
-                """SELECT id, query_from, query_to, completed_at, report_path
+                """SELECT id, query_from, query_to, completed_at, report_path, summary_json
                    FROM analysis_jobs
                    WHERE status = 'completed'
                      AND completed_at >= ?
@@ -179,7 +179,7 @@ class JobRepository:
         conn = self._conn()
         try:
             rows = conn.execute(
-                f"SELECT {', '.join(_JOB_COLS_SHORT)} FROM analysis_jobs ORDER BY id DESC LIMIT ?",
+                f"SELECT {', '.join(_JOB_COLS_FULL)} FROM analysis_jobs ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
             return [dict(r) for r in rows]

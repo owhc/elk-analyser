@@ -1,9 +1,10 @@
 <!DOCTYPE html>
+<!-- Updated: 2026-09-15 22:05:30 +0800 -->
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="updated" content="2026-08-27 16:27:40 +0800">
+<meta name="updated" content="2026-09-15 22:05:30 +0800">
 <title>ELK Analyser — Dashboard</title>
 <style>
 /* ── Reset ──────────────────────────────────────────────────────── */
@@ -253,6 +254,11 @@ body::before{
 .btn-primary:disabled{opacity:.38;cursor:not-allowed;}
 .btn-primary.is-loading::after{content:' …';}
 
+.btn-instana{display:inline-flex;align-items:center;gap:4px;padding:var(--sp-2) var(--sp-4);border-radius:var(--radius);border:1px solid rgba(122,155,181,.4);background:rgba(122,155,181,.08);color:var(--morandi-l);font-size:var(--text-sm);font-weight:600;cursor:pointer;transition:background .15s,border-color .15s;}
+.btn-instana:hover{background:rgba(122,155,181,.16);border-color:var(--morandi);}
+.btn-instana:disabled{opacity:.38;cursor:not-allowed;}
+.btn-instana.is-loading::after{content:' …';}
+
 .btn-secondary{
   width:100%;padding:var(--sp-2) var(--sp-3);border-radius:var(--radius-sm);cursor:pointer;
   background:var(--navy-lt);border:1px solid var(--morandi-dim);
@@ -277,14 +283,14 @@ body::before{
 
 /* Explicit header row — not a data row */
 .job-header{
-  display:grid;grid-template-columns:20px 28px 1fr auto auto;gap:var(--sp-2);
+  display:grid;grid-template-columns:20px 28px 1fr minmax(120px,1.4fr) auto auto;gap:var(--sp-2);
   padding:var(--sp-1) var(--sp-3);
   border-bottom:1px solid var(--border);margin-bottom:var(--sp-1);
 }
 .job-header-cell{font-size:var(--text-2xs);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);}
 
 .job-row{
-  display:grid;grid-template-columns:20px 28px 1fr auto auto;gap:var(--sp-2);align-items:center;
+  display:grid;grid-template-columns:20px 28px 1fr minmax(120px,1.4fr) auto auto;gap:var(--sp-2);align-items:center;
   padding:var(--sp-2) var(--sp-3);border-radius:var(--radius-sm);background:var(--surface-mid);
   border:1px solid transparent;cursor:pointer;
   transition:border-color var(--t-fast),background var(--t-fast);
@@ -299,6 +305,9 @@ body::before{
 .job-id{font-size:var(--text-xs);color:var(--text-muted);font-weight:600;}
 .job-window{font-size:var(--text-xs);color:var(--text);}
 .job-window span{color:var(--text-muted);font-size:var(--text-2xs);display:block;}
+.job-incident{min-width:0;}
+.job-incident-title{font-size:var(--text-xs);font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.job-incident-impact{font-size:var(--text-2xs);color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}
 .job-status{font-size:var(--text-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
 .job-status.completed{color:var(--ok);}
 .job-status.failed   {color:var(--critical);}
@@ -372,6 +381,12 @@ body::before{
 .detail-row{display:flex;gap:var(--sp-3);font-size:var(--text-sm);}
 .detail-key{color:var(--text-muted);min-width:88px;flex-shrink:0;}
 .detail-val{color:var(--text);word-break:break-all;}
+.incident-banner{padding:var(--sp-3) var(--sp-4);background:var(--surface-mid);border:1px solid var(--border);border-radius:var(--radius);}
+.incident-banner-title{font-size:var(--text-sm);font-weight:700;color:var(--text);margin-bottom:var(--sp-2);}
+.incident-banner-text,.impact-text{font-size:var(--text-xs);line-height:1.6;color:var(--text-muted);white-space:pre-line;}
+.impact-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2);}
+.impact-item{padding:var(--sp-3);background:var(--surface-mid);border-radius:var(--radius-sm);}
+.impact-label{font-size:var(--text-2xs);font-weight:700;color:var(--morandi);margin-bottom:var(--sp-1);}
 .chain-card{
   background:var(--surface-mid);border:1px solid var(--border);
   border-radius:var(--radius);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-3);
@@ -509,6 +524,7 @@ body::before{
         </div>
         <div class="btn-group">
           <button class="btn-primary" id="btn-analyse" onclick="triggerAnalyse()">▶ 立即分析</button>
+          <button class="btn-instana" id="btn-analyse-instana" onclick="triggerAnalyseWithInstana()">⚡ ELK + Instana 合併分析</button>
           <button class="btn-secondary" id="btn-demo" onclick="injectDemo()">注入 Demo 資料</button>
         </div>
         <div class="form-feedback" id="analyse-feedback" role="status" aria-live="polite"></div>
@@ -540,6 +556,7 @@ body::before{
         <div class="job-cb"><input type="checkbox" id="cb-all" title="全選" onclick="toggleSelectAll(this)" aria-label="全選所有任務"></div>
         <div class="job-header-cell" role="columnheader">#</div>
         <div class="job-header-cell" role="columnheader">查詢視窗</div>
+        <div class="job-header-cell" role="columnheader">事故狀況</div>
         <div class="job-header-cell" role="columnheader">狀態</div>
         <div class="job-header-cell" role="columnheader">報告</div>
       </div>
@@ -581,6 +598,20 @@ const REFRESH_MS = 30000;
 
 // ── Helpers ──────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[ch]);
+}
+
+function severityClass(value) {
+  return ['CRITICAL', 'HIGH', 'MEDIUM'].includes(value) ? value : 'MEDIUM';
+}
+
+function statusClass(value) {
+  return ['queued', 'running', 'completed', 'failed'].includes(value) ? value : 'queued';
+}
 
 function fmtDt(iso) {
   if (!iso) return '—';
@@ -687,32 +718,41 @@ async function loadJobs() {
         </div>`;
       return;
     }
-    list.innerHTML = jobs.map(j => `
-      <div class="job-row" id="row-${j.id}"
+    list.innerHTML = jobs.map(j => {
+      const incident = j.summary?.incident_status || {};
+      const impact = j.summary?.impact_analysis || {};
+      const id = Number(j.id);
+      const jobStatus = statusClass(j.status);
+      return `
+      <div class="job-row" id="row-${id}"
            role="button" tabindex="0"
-           aria-label="查看任務 #${j.id} 詳情"
-           onclick="openDetail(${j.id})"
-           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openDetail(${j.id});}">
+           aria-label="查看任務 #${id} 詳情"
+           onclick="openDetail(${id})"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openDetail(${id});}">
         <div class="job-cb" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
-          <input type="checkbox" class="job-cb-input" data-id="${j.id}"
-                 aria-label="選取任務 #${j.id}"
+          <input type="checkbox" class="job-cb-input" data-id="${id}"
+                 aria-label="選取任務 #${id}"
                  onchange="onRowCheck()">
         </div>
-        <div class="job-id">${j.id}</div>
+        <div class="job-id">${id}</div>
         <div class="job-window">
-          ${shortDt(j.query_from)}
-          <span>→ ${shortDt(j.query_to)}</span>
+          ${escapeHtml(shortDt(j.query_from))}
+          <span>→ ${escapeHtml(shortDt(j.query_to))}</span>
         </div>
-        <div class="job-status ${j.status}">${j.status}</div>
+        <div class="job-incident">
+          <div class="job-incident-title">${escapeHtml(incident.title || '尚無事故摘要')}</div>
+          <div class="job-incident-impact">${escapeHtml(impact.customer_impact || impact.business_impact || '—')}</div>
+        </div>
+        <div class="job-status ${jobStatus}">${escapeHtml(j.status)}</div>
         <div>${j.report_path
-          ? `<a class="job-report" href="/api/jobs/${j.id}/report" download
-               title="${j.report_path}"
-               aria-label="下載任務 #${j.id} 報告"
+          ? `<a class="job-report" href="/api/jobs/${id}/report" download
+               title="${escapeHtml(j.report_path)}"
+               aria-label="下載任務 #${id} 報告"
                onclick="event.stopPropagation()">↓ 下載</a>`
           : `<span style="color:var(--text-dim);font-size:var(--text-2xs);">—</span>`
         }</div>
       </div>
-    `).join('');
+    `}).join('');
   } catch(e) {
     list.innerHTML = `<div class="jobs-empty" style="color:var(--critical);">無法連線至 API，請確認 elk-analyser container 是否運行。</div>`;
     updateKPI([]);
@@ -769,7 +809,11 @@ async function triggerAnalyse() {
     });
     const data = await res.json();
     if (res.ok && data.status === 'completed') {
-      fb.textContent = `分析完成：異常 ${data.summary?.total_errors ?? 0} 筆，CRITICAL ${data.summary?.critical_count ?? 0} 筆`;
+      const dedup  = data.summary?._deduplicated;
+      const errors = data.summary?.total_errors ?? 0;
+      const crits  = data.summary?.critical_count ?? 0;
+      const prefix = dedup ? '（使用既有結果）' : '';
+      fb.textContent = `${prefix}分析完成：異常 ${errors} 筆，CRITICAL ${crits} 筆`;
       fb.className   = 'form-feedback ok';
       loadJobs();
     } else {
@@ -786,6 +830,56 @@ async function triggerAnalyse() {
   }
 }
 
+// ── Trigger Analyse with Instana ──────────────────────────────────
+async function triggerAnalyseWithInstana() {
+  const fromEl = $('from-time');
+  const toEl   = $('to-time');
+  const btn    = $('btn-analyse-instana');
+  const fb     = $('analyse-feedback');
+
+  if (!fromEl.value || !toEl.value) {
+    fb.textContent = '請選擇開始時間與結束時間';
+    fb.className   = 'form-feedback err';
+    return;
+  }
+  const fromTime = fromEl.value.replace('T', ' ');
+  const toTime   = toEl.value.replace('T', ' ');
+
+  btn.disabled    = true;
+  btn.textContent = 'Instana 收集中…';
+  btn.classList.add('is-loading');
+  fb.textContent  = '';
+  fb.className    = 'form-feedback';
+
+  try {
+    const res  = await fetch(`${API}/analyse`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({from_time: fromTime, to_time: toTime, trigger: 'webui_instana'}),
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'completed') {
+      const dedup   = data.summary?._deduplicated;
+      const errors  = data.summary?.total_errors ?? 0;
+      const crits   = data.summary?.critical_count ?? 0;
+      const prefix  = dedup ? '（使用既有結果）' : '';
+      fb.textContent = `${prefix}ELK + Instana 合併分析完成：異常 ${errors} 筆，CRITICAL ${crits} 筆`;
+      fb.className   = 'form-feedback ok';
+      loadJobs();
+    } else {
+      fb.textContent = `分析失敗：${data.error || data.detail || '未知錯誤'}`;
+      fb.className   = 'form-feedback err';
+    }
+  } catch(e) {
+    fb.textContent = '無法連線至 API';
+    fb.className   = 'form-feedback err';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '⚡ ELK + Instana 合併分析';
+    btn.classList.remove('is-loading');
+  }
+}
+
 // ── Demo inject ───────────────────────────────────────────────────
 async function injectDemo() {
   const btn = $('btn-demo');
@@ -797,8 +891,8 @@ async function injectDemo() {
 
   const fromEl = $('from-time');
   const toEl   = $('to-time');
-  const fromTime = fromEl.value ? fromEl.value.replace('T',' ') : '2025-01-15 08:00';
-  const toTime   = toEl.value   ? toEl.value.replace('T',' ')   : '2025-01-15 09:00';
+  const fromTime = fromEl.value ? fromEl.value.replace('T',' ') : '2026-01-15 08:00';
+  const toTime   = toEl.value   ? toEl.value.replace('T',' ')   : '2026-01-15 09:00';
 
   try {
     const res  = await fetch(`${API}/demo/inject`, {
@@ -844,20 +938,26 @@ async function openDetail(id) {
   try {
     const res = await fetch(`${API}/jobs/${id}`);
     const j   = await res.json();
-    const chains = j.summary?.event_chains || [];
-    const s = j.summary || {};
+    const chains = Array.isArray(j.summary?.event_chains) ? j.summary.event_chains : [];
+    const s = j.summary && typeof j.summary === 'object' ? j.summary : {};
+    const incident = s.incident_status && typeof s.incident_status === 'object' ? s.incident_status : {};
+    const impact = s.impact_analysis && typeof s.impact_analysis === 'object' ? s.impact_analysis : {};
+    const modules = Array.isArray(s.affected_modules) ? s.affected_modules : [];
+    const services = Array.isArray(impact.affected_services) ? impact.affected_services : [];
+    const jobStatus = statusClass(j.status);
+    const incidentSeverity = severityClass(incident.severity);
 
     body.innerHTML = `
       <div class="detail-section">
         <div class="detail-section-title">任務資訊</div>
         <div class="detail-kv">
-          <div class="detail-row"><span class="detail-key">ID</span><span class="detail-val">${j.id}</span></div>
-          <div class="detail-row"><span class="detail-key">觸發模式</span><span class="detail-val">${j.trigger_mode}</span></div>
-          <div class="detail-row"><span class="detail-key">查詢視窗</span><span class="detail-val">${fmtDt(j.query_from)} → ${fmtDt(j.query_to)}</span></div>
-          <div class="detail-row"><span class="detail-key">狀態</span><span class="detail-val job-status ${j.status}">${j.status}</span></div>
-          <div class="detail-row"><span class="detail-key">開始時間</span><span class="detail-val">${fmtDt(j.started_at)}</span></div>
-          <div class="detail-row"><span class="detail-key">完成時間</span><span class="detail-val">${fmtDt(j.completed_at)}</span></div>
-          ${j.error ? `<div class="detail-row"><span class="detail-key">錯誤訊息</span><span class="detail-val" style="color:var(--critical)">${j.error}</span></div>` : ''}
+          <div class="detail-row"><span class="detail-key">ID</span><span class="detail-val">${Number(j.id)}</span></div>
+          <div class="detail-row"><span class="detail-key">觸發模式</span><span class="detail-val">${escapeHtml(j.trigger_mode)}</span></div>
+          <div class="detail-row"><span class="detail-key">查詢視窗</span><span class="detail-val">${escapeHtml(fmtDt(j.query_from))} → ${escapeHtml(fmtDt(j.query_to))}</span></div>
+          <div class="detail-row"><span class="detail-key">狀態</span><span class="detail-val job-status ${jobStatus}">${escapeHtml(j.status)}</span></div>
+          <div class="detail-row"><span class="detail-key">開始時間</span><span class="detail-val">${escapeHtml(fmtDt(j.started_at))}</span></div>
+          <div class="detail-row"><span class="detail-key">完成時間</span><span class="detail-val">${escapeHtml(fmtDt(j.completed_at))}</span></div>
+          ${j.error_message ? `<div class="detail-row"><span class="detail-key">錯誤訊息</span><span class="detail-val" style="color:var(--critical)">${escapeHtml(j.error_message)}</span></div>` : ''}
         </div>
       </div>
 
@@ -865,10 +965,31 @@ async function openDetail(id) {
       <div class="detail-section">
         <div class="detail-section-title">分析摘要</div>
         <div class="detail-kv">
-          <div class="detail-row"><span class="detail-key">異常總數</span><span class="detail-val">${s.total_errors}</span></div>
-          <div class="detail-row"><span class="detail-key">CRITICAL</span><span class="detail-val" style="color:var(--critical)">${s.critical_count}</span></div>
-          <div class="detail-row"><span class="detail-key">WARNING</span><span class="detail-val" style="color:var(--high)">${s.warning_count}</span></div>
-          <div class="detail-row"><span class="detail-key">受影響模組</span><span class="detail-val">${(s.affected_modules||[]).join(', ') || '—'}</span></div>
+          <div class="detail-row"><span class="detail-key">異常總數</span><span class="detail-val">${escapeHtml(s.total_errors)}</span></div>
+          <div class="detail-row"><span class="detail-key">CRITICAL</span><span class="detail-val" style="color:var(--critical)">${escapeHtml(s.critical_count)}</span></div>
+          <div class="detail-row"><span class="detail-key">WARNING</span><span class="detail-val" style="color:var(--high)">${escapeHtml(s.warning_count)}</span></div>
+          <div class="detail-row"><span class="detail-key">受影響模組</span><span class="detail-val">${escapeHtml(modules.join(', ') || '—')}</span></div>
+        </div>
+      </div>` : ''}
+
+      ${incident.title ? `
+      <div class="detail-section">
+        <div class="detail-section-title">事故狀況</div>
+        <div class="incident-banner">
+          <div class="chain-sev ${incidentSeverity}">${escapeHtml(incident.status || 'MONITORING')} · ${escapeHtml(incident.severity || 'MEDIUM')}</div>
+          <div class="incident-banner-title">${escapeHtml(incident.title)}</div>
+          <div class="incident-banner-text">${escapeHtml(incident.description || '—')}</div>
+        </div>
+      </div>` : ''}
+
+      ${Object.keys(impact).length ? `
+      <div class="detail-section">
+        <div class="detail-section-title">影響範圍分析</div>
+        <div class="impact-grid">
+          <div class="impact-item"><div class="impact-label">受影響服務</div><div class="impact-text">${escapeHtml(services.join('、') || '—')}</div></div>
+          <div class="impact-item"><div class="impact-label">客戶影響</div><div class="impact-text">${escapeHtml(impact.customer_impact || '—')}</div></div>
+          <div class="impact-item"><div class="impact-label">業務影響</div><div class="impact-text">${escapeHtml(impact.business_impact || '—')}</div></div>
+          <div class="impact-item"><div class="impact-label">營運影響</div><div class="impact-text">${escapeHtml(impact.operational_impact || '—')}</div></div>
         </div>
       </div>` : ''}
 
@@ -876,8 +997,8 @@ async function openDetail(id) {
       <div class="detail-section">
         <div class="detail-section-title">診斷報告</div>
         <div style="display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap;">
-          <div style="font-size:var(--text-xs);color:var(--text-muted);word-break:break-all;flex:1;">${j.report_path}</div>
-          <a href="/api/jobs/${j.id}/report" download
+          <div style="font-size:var(--text-xs);color:var(--text-muted);word-break:break-all;flex:1;">${escapeHtml(j.report_path)}</div>
+          <a href="/api/jobs/${Number(j.id)}/report" download
              style="display:inline-block;padding:var(--sp-2) var(--sp-4);background:var(--morandi);color:var(--navy);border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:700;text-decoration:none;white-space:nowrap;">
             ↓ 下載 PPTX
           </a>
@@ -887,19 +1008,19 @@ async function openDetail(id) {
       ${chains.length ? `
       <div class="detail-section">
         <div class="detail-section-title">根因事件鏈（${chains.length}）</div>
-        ${chains.map(c => `
+        ${chains.filter(c => c && typeof c === 'object').map(c => `
           <div class="chain-card">
-            <div class="chain-sev ${c.severity}">${c.severity}</div>
-            <div class="chain-title">${c.title || c.chain_id}</div>
-            <div class="chain-rc">${c.root_cause || ''}</div>
-            ${c.short_term_fix ? `<div class="chain-fix-title">短期處置</div><div class="chain-fix">${c.short_term_fix}</div>` : ''}
-            ${c.long_term_fix  ? `<div class="chain-fix-title">長期改善</div><div class="chain-fix">${c.long_term_fix}</div>` : ''}
+            <div class="chain-sev ${severityClass(c.severity)}">${escapeHtml(c.severity)}</div>
+            <div class="chain-title">${escapeHtml(c.title || c.chain_id)}</div>
+            <div class="chain-rc">${escapeHtml(c.root_cause || '')}</div>
+            ${c.short_term_fix ? `<div class="chain-fix-title">短期處置</div><div class="chain-fix">${escapeHtml(c.short_term_fix)}</div>` : ''}
+            ${c.long_term_fix  ? `<div class="chain-fix-title">長期改善</div><div class="chain-fix">${escapeHtml(c.long_term_fix)}</div>` : ''}
           </div>
         `).join('')}
       </div>` : ''}
     `;
   } catch(e) {
-    body.innerHTML = `<div style="color:var(--critical);font-size:var(--text-sm);padding:1rem;">載入失敗：${e.message}</div>`;
+    body.innerHTML = `<div style="color:var(--critical);font-size:var(--text-sm);padding:1rem;">載入失敗：${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -991,10 +1112,34 @@ async function deleteSelected() {
 }
 
 // ── Init datetime inputs ──────────────────────────────────────────
-function initDatetimeInputs() {
+// 優先填入最近一筆 ELK+Instana completed job 的時間段；找不到才 fallback 到 now-1h
+async function initDatetimeInputs() {
+  const fmt = d => {
+    // datetime-local 需要 local time 格式（YYYY-MM-DDTHH:MM），不可用 UTC
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  try {
+    const res  = await fetch(`${API}/jobs?limit=50`);
+    const jobs = res.ok ? await res.json() : [];
+    // 找最近一筆 instana completed job
+    const hit  = jobs.find(j =>
+      j.status === 'completed' &&
+      j.trigger_mode && j.trigger_mode.includes('instana') &&
+      j.query_from && j.query_to
+    );
+    if (hit) {
+      // query_from/to 是 ISO 字串（UTC），轉成 Date 再格式化為 local
+      $('from-time').value = fmt(new Date(hit.query_from));
+      $('to-time').value   = fmt(new Date(hit.query_to));
+      return;
+    }
+  } catch(_) { /* fallback */ }
+
+  // Fallback：現在時間往前 1 小時
   const now  = new Date();
   const from = new Date(now - 3600000);
-  const fmt  = d => d.toISOString().slice(0,16);
   $('to-time').value   = fmt(now);
   $('from-time').value = fmt(from);
 }

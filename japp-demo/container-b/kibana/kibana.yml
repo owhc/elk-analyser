@@ -1,0 +1,23 @@
+# Kibana 8.x settings
+# Updated: 2026-09-02 16:20:51 +0800
+
+server.name: banking-kibana
+server.host: "0.0.0.0"
+server.port: 5601
+
+# Connect to Elasticsearch (no TLS for demo)
+elasticsearch.hosts: ["http://elasticsearch:9200"]
+
+# Kibana 8.13.4 不支援 xpack.security.enabled（由 Elasticsearch 控制）
+# 改用 elasticsearch.ssl.verificationMode: none 即可
+xpack.encryptedSavedObjects.encryptionKey: "bankingdemo-encryptionkey-32chars!!"
+
+# Telemetry
+telemetry.enabled: false
+telemetry.optIn: false
+
+# Logging
+logging.root.level: warn
+
+# Disable news feed
+newsfeed.enabled: false

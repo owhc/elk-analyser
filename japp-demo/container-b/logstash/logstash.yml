@@ -1,0 +1,21 @@
+# Logstash settings
+# Updated: 2026-09-02 16:20:51 +0800
+
+http.host: "0.0.0.0"
+path.config: /usr/share/logstash/pipeline
+path.data: /usr/share/logstash/data
+
+# Disable ECS compatibility to avoid schema warnings with Liberty JSON fields
+pipeline.ecs_compatibility: disabled
+
+# Performance (single-node demo)
+pipeline.workers: 1
+pipeline.batch.size: 125
+pipeline.batch.delay: 50
+
+# Monitoring (disabled for demo)
+monitoring.enabled: false
+xpack.monitoring.enabled: false
+
+# Logging
+log.level: warn

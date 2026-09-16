@@ -25,8 +25,9 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python \
 
 # 安裝 Bob CLI（F-08：固定版本號，確保 build 可重現、與 custom_modes.yaml 相容）
 # bob CLI 需要 Node.js，本 image 已基於 node:22-slim
-# 版本號：請在驗證新版相容後更新此變數（目前鎖定 2.x 最新穩定版）
-ARG BOB_VERSION=latest
+# 版本號：留空表示安裝最新版；或指定 X.Y.Z 格式（例如 2.1.0）
+# Updated: 2026-09-15 20:10:11 +0800
+ARG BOB_VERSION=
 RUN curl -s https://s3.us-south.cloud-object-storage.appdomain.cloud/bobshell/install-bobshell.sh \
     | bash -s -- --pm npm ${BOB_VERSION:+--version ${BOB_VERSION}} \
     && which bob || (echo "ERROR: Bob CLI 安裝失敗" && exit 1) \
@@ -51,7 +52,7 @@ COPY config/ ./config/
 COPY db/ ./db/
 COPY mock/ ./mock/
 COPY bob-custom-modes/ ./bob-custom-modes/
-COPY cli.py analysis_pipeline.py api.py gen_fake_data.py config_loader.py ./
+COPY cli.py analysis_pipeline.py api.py gen_fake_data.py config_loader.py instana_collector.py ./
 
 # 部署 Bob custom modes（log-analyst + report-builder）
 # bob 2.x globalScopeRoot = /root/.bob/settings，custom modes 路徑為：

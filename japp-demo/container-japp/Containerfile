@@ -1,0 +1,110 @@
+# Updated: 2026-09-15 19:56:07 +0800
+# container-japp — WAS Liberty (kernel-java17) + ActiveMQ Artemis 2.32.0
+# PostgreSQL 以獨立 Podman service 運行（見 podman-compose.yml）
+# WAS Liberty WAR 透過 dropins/ volume mount 部署，不需重建此 image
+
+# ARM64 原生 image（移除 --platform=linux/amd64，避免 QEMU 模擬導致 OpenJ9 JVMTI 失效）
+FROM icr.io/appcafe/websphere-liberty:kernel-java17-openj9-ubi
+
+# ─── 切換 root 安裝系統依賴 ───────────────────────────────────────────
+USER root
+
+# Liberty kernel-java17-openj9-ubi 使用 dnf（UBI 9）
+RUN dnf install -y python3-pip curl tar gzip shadow-utils \
+    && pip3 install --no-cache-dir supervisor \
+    && dnf clean all
+
+# ─── 下載並解壓 ActiveMQ Artemis 2.32.0 ──────────────────────────────
+ARG ARTEMIS_VERSION=2.32.0
+ARG ARTEMIS_URL=https://archive.apache.org/dist/activemq/activemq-artemis/${ARTEMIS_VERSION}/apache-artemis-${ARTEMIS_VERSION}-bin.tar.gz
+
+RUN curl -fsSL "${ARTEMIS_URL}" -o /tmp/artemis.tar.gz \
+    && tar -xzf /tmp/artemis.tar.gz -C /opt \
+    && mv /opt/apache-artemis-${ARTEMIS_VERSION} /opt/artemis-dist \
+    && rm /tmp/artemis.tar.gz
+
+# ─── 建立 Artemis broker instance ────────────────────────────────────
+# --allow-anonymous：允許匿名連線（demo 環境，與 --require-login 互斥，選其一）
+# --no-web：停用 Artemis 內建 web 管理伺服器（減少資源）
+RUN /opt/artemis-dist/bin/artemis create /var/lib/artemis-broker \
+      --user admin \
+      --password admin123 \
+      --allow-anonymous \
+      --no-autotune \
+      --no-web \
+    && echo "Artemis broker instance created at /var/lib/artemis-broker"
+
+# ─── 下載 Artemis JMS Resource Adapter（供 Liberty server.xml 引用）────
+# artemis-ra.rar 讓 Liberty 可透過標準 JCA 介面連接 Artemis AMQP broker
+# NOTE: JCA artemis-ra.rar 已棄用，改由 Spring artemis-jms-client 直連，無需 RA
+
+# ─── 安裝 Liberty features（最小子集，全 Jakarta EE 9）────────────────
+# JMS/MDB 由 Spring JMS + artemis-jms-client 在應用層處理，不需 Liberty JCA
+# 移除：connectors-2.0 / messaging-3.0 / messagingClient-3.0 / mdb-4.0 / ejb-3.2
+# jndi-1.0：供 Spring JNDI lookup（jdbc/bankingDS DataSource）
+RUN installUtility install --acceptLicense \
+      servlet-5.0 \
+      jdbc-4.2 \
+      jndi-1.0 \
+      cdi-3.0 \
+      jsonp-2.0 \
+      jsonb-2.0 \
+      monitor-1.0
+
+# ─── 下載 PostgreSQL JDBC Driver ───────────────────────────────────
+RUN mkdir -p /opt/ibm/wlp/usr/shared/resources/postgres \
+    && curl -fsSL "https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.3/postgresql-42.7.3.jar" \
+         -o /opt/ibm/wlp/usr/shared/resources/postgres/postgresql.jar
+
+# ─── 建立日誌目錄（app_logs 共享 volume 掛載點）─────────────────────
+RUN mkdir -p /logs/liberty /logs/artemis /logs/postgres \
+    && chmod -R 775 /logs
+
+# ─── 複製 supervisord 設定 ────────────────────────────────────────────
+# build context 為 japp-demo/，故路徑需含 container-japp/ 前綴
+COPY container-japp/supervisord.conf /etc/supervisor/conf.d/japp.conf
+
+# ─── supervisord 主設定檔（若系統未建立）────────────────────────────
+RUN mkdir -p /etc/supervisor \
+    && printf '[unix_http_server]\nfile=/tmp/supervisor.sock\nchmod=0700\n\n[supervisord]\nnodaemon=true\nlogfile=/logs/supervisor.log\npidfile=/tmp/supervisord.pid\n\n[rpcinterface:supervisor]\nsupervisor.rpcinterface_factory=supervisor.rpcinterface:make_main_rpcinterface\n\n[supervisorctl]\nserverurl=unix:///tmp/supervisor.sock\n\n[include]\nfiles=/etc/supervisor/conf.d/*.conf\n' \
+        > /etc/supervisor/supervisord.conf
+
+# ─── 調整目錄擁有者，切回 Liberty 非 root user（UID 1001）───────────
+RUN chown -R 1001:0 /var/lib/artemis-broker /logs /etc/supervisor \
+    && chmod -R g+rwX /var/lib/artemis-broker /logs /etc/supervisor
+
+# ─── 環境變數（可由 podman-compose.yml / override.yml 覆寫）─────────
+# Instana agent 注入：在 override.yml 設定 JAVA_TOOL_OPTIONS 指向掛載的 agent JAR
+ENV JAVA_TOOL_OPTIONS=""
+
+# MQ 連線（Artemis 在同一容器 localhost）
+ENV MQ_HOST=localhost
+ENV MQ_PORT=5672
+ENV MQ_USER=admin
+ENV MQ_PASS=admin123
+
+# PostgreSQL 連線（獨立 Podman service，服務名稱 banking-db）
+ENV DB_HOST=banking-db
+ENV DB_PORT=5432
+ENV DB_NAME=bankdb
+ENV DB_USER=db2inst1
+ENV DB_PASS=db2admin123
+
+# Liberty logging
+ENV WLP_LOGGING_CONSOLE_FORMAT=json
+ENV WLP_LOGGING_CONSOLE_LOGLEVEL=info
+ENV LOG_DIR=/logs/liberty
+
+# ─── 暴露端口 ─────────────────────────────────────────────────────────
+# 9080  — WAS Liberty HTTP
+# 9443  — WAS Liberty HTTPS
+# 5672  — ActiveMQ Artemis AMQP（JMS/MQ Light 相容）
+# 8161  — Artemis Web Console（admin/admin123）
+EXPOSE 9080 9443 5672 8161
+
+# ─── 切回非 root user ────────────────────────────────────────────────
+USER 1001
+
+# ─── 啟動點：supervisord 管理 Liberty + Artemis ───────────────────────
+# 使用絕對路徑（pip3 install 在 /usr/local/bin/）
+ENTRYPOINT ["/usr/local/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]

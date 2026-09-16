@@ -1,140 +1,37 @@
 # AGENTS.md
-<!-- Updated: 2026-08-27 00:19:44 +0800 -->
+<!-- Updated: 2026-09-15 22:45:24 +0800 -->
 
 ## Session Memory
 @.bob/memory/session.md
 
-This file provides guidance to agents when working with code in this repository.
+## Stack & Architecture
+- **Core**: Python 3 (FastAPI + Click CLI + SQLite); proxy `web:3001` -> `elk-analyser:8080`
+- **Banking Demo**: WAS Liberty -> Artemis(`bankingQueue`) -> MDB -> PostgreSQL 16 (JDBC via `jdbcExecutor.submit()`) -> Logstash -> ES
+- **Pipeline**: [`extractor`](bob-analyser/analyser/extractor.py) -> [`preprocessor`](bob-analyser/analyser/preprocessor.py) -> [`bob_bridge`](bob-analyser/analyser/bob_bridge.py) -> [`report_builder`](bob-analyser/analyser/report_builder.py) orchestrated by [`run_analysis()`](bob-analyser/analysis_pipeline.py)
+- **Instana**: Trigger (`*_instana` / `--with-instana`) -> [`instana_collector`](bob-analyser/instana_collector.py) -> injects `instana_context` into `event_sequence` & PPTX Slide 3.5; pure ELK fallback on failure
+- **Window Priority**: (1) `from_time` -> (2) `lookback_minutes` -> (3) Checkpoint (`id=1`, updated on `completed` only) -> (4) `now - default_lookback_minutes`
+- **Bob Bridge**: `bob run --accept-license --mode log-analyst --format json --max-turns 5 @/workspace/logs/job-{id}.json` (strip fences, parse `last_message`)
+- **Paths**: Config `/app/config/config.yaml` (`ELK_CONFIG` override) · DB `/db/history.db` · Reports `/reports/` · Workspace `/workspace/logs/`
 
-## Stack
+## Hard Rules
+- **No Exceptions**: `analyse()` & `build_report()` must return `{"error": "..."}` dict, never raise
+- **Timezone**: All `datetime` must be timezone-aware (`replace(tzinfo=timezone.utc)`)
+- **Config Seam**: Load solely via `AppConfig.load(config_path)` (explicit > `ELK_CONFIG` > `/app/config/config.yaml`)
+- **Logging & CJK**: Use `logging.getLogger(__name__)` (no `print()`); all CJK JSON requires `json.dumps(..., ensure_ascii=False)`
+- **DB Mutations**: `JobRepository.complete_job` / `fail_job` use `WHERE id=?`
 
-- **Backend**: Python 3 (FastAPI + Click CLI + SQLite)
-- **Frontend**: Nginx static Web UI (`web/` — port 3001), proxies API calls to `elk-analyser:8080`
-- **Container**: Podman Compose — two services: `elk-analyser` (port 8080) + `elk-analyser-web` (port 3001)
-  - Build context for `elk-analyser` is `./bob-analyser/`, NOT repo root
-- **AI Bridge**: Bob CLI (`bob run`) runs **directly inside** the `elk-analyser` container (not SSH to external sandbox)
-- **No scheduler** — analysis is triggered by: Kibana Alert Webhook / Web UI / manual CLI → `POST /analyse`
-
-## Commands
-
+## Quick Reference
 ```bash
-# Build & start all containers
-podman-compose up --build -d
-
-# On-demand analysis (inside container)
-podman exec elk-analyser python cli.py run --from "2025-01-15 08:00" --to "2025-01-15 12:00"
-
-# Trigger via API — manual (from host)
-curl -X POST http://localhost:8080/analyse \
-  -H "Content-Type: application/json" \
-  -d '{"from_time":"2025-01-15 08:00","to_time":"2025-01-15 12:00"}'
-
-# Trigger via API — async (returns job_id immediately)
-curl -X POST http://localhost:8080/analyse/async \
-  -H "Content-Type: application/json" \
-  -d '{"from_time":"2025-01-15 08:00","to_time":"2025-01-15 12:00"}'
-
-# Trigger via API — simulate Kibana Alert (lookback_minutes)
-curl -X POST http://localhost:8080/analyse \
-  -H "Content-Type: application/json" \
-  -d '{"to_time":"2025-01-15 12:00","lookback_minutes":5,"trigger":"kibana_alert"}'
-
-# Inject demo data (WAS/MQ/DB2 mock logs)
-curl -X POST http://localhost:8080/demo/inject
-
-# View analysis history / download report
-podman exec elk-analyser python cli.py history --limit 10
-curl http://localhost:8080/jobs
-curl -O http://localhost:8080/jobs/1/report
-
-# API health check
-curl http://localhost:8080/health
+# Start Stack / pg_monitor
+bash scripts/setup-instana.sh && podman-compose -f podman-compose.yml -f podman-compose.override.yml up -d
+podman exec -it banking-db psql -U db2inst1 -d bankdb -c "GRANT pg_monitor TO db2inst1;"
+# Trigger Analysis (CLI / Webhook / Demo Inject)
+podman exec elk-analyser python cli.py run --from "2026-01-15 08:00" --to "2026-01-15 12:00" --with-instana
+curl -sX POST http://localhost:8080/analyse -H 'Content-Type: application/json' -d '{"from_time":"2026-01-15 08:00","to_time":"2026-01-15 12:00","trigger":"webui_instana"}'
+curl -sX POST http://localhost:8080/demo/inject -H 'Content-Type: application/json' -d '{"from_time":"2026-01-15 08:00","to_time":"2026-01-15 09:00","trigger_analyse":true}'
+# Verify & E2E Incident Test
+curl http://localhost:8080/jobs && curl -O http://localhost:8080/jobs/1/report && bash scripts/generate-observability-incident.sh 1
 ```
-
-No unit tests or linter configs exist in this repo. Validation is manual via container exec.
-
-## Critical Architecture
-
-**Pipeline**: `extractor.py` → `preprocessor.py` → `bob_bridge.py` → `report_builder.py`
-
-All four stages are orchestrated by [`analysis_pipeline.run_analysis()`](bob-analyser/analysis_pipeline.py).
-
-**Containers** (podman-compose.yml):
-- `elk-analyser` — FastAPI + Bob CLI bridge; fixed IP `10.89.1.10` on `elk-analyser-network`
-- `elk-analyser-web` — Nginx static UI (port 3001), proxies `/api/` → `elk-analyser:8080`
-
-**Volumes**:
-- `bob_workspace` → `/workspace` — event-sequence JSON handoff (shared with bob)
-- `elk_reports` → `/reports` — PPTX output
-- `elk_db` → `/db` — SQLite persistence
-
-**Checkpoint**: stored in SQLite `checkpoint` table (single row, `id=1`). Only written on `completed` status — failures preserve the previous checkpoint so the next run retries the same window.
-
-**`POST /analyse` query window resolution** (four-stage priority):
-1. `from_time` provided → use directly (Web UI / CLI)
-2. `lookback_minutes` provided → `from_time = to_time - lookback_minutes` (Kibana Alert)
-3. Neither provided, Checkpoint exists → resume from last `query_to`
-4. None of the above → `now - config.checkpoint.default_lookback_minutes` (default 60 min)
-
-**Bob Bridge** writes event sequence JSON to `/workspace/logs/job-{id}.json` then calls:
-```
-bob run --accept-license --mode log-analyst --format json --max-turns 5 @/workspace/logs/job-{id}.json
-```
-Parses `last_message` from the JSON output. Strips markdown code fences before JSON parse.
-
-**Paths inside container** (hardcoded):
-- Config: `/app/config/config.yaml`
-- DB: `/db/history.db`
-- Reports: `/reports/`
-- Workspace: `/workspace/logs/`
-
-## Code Style
-
-- Module-level `logger = logging.getLogger(__name__)` — never `print()` in analyser modules
-- Config always loaded via `_load_config(config_path)` helper at top of each module
-- `config_path` defaulting to `/app/config/config.yaml` is the contract — always propagate it
-- Datetime objects must carry timezone info (`tzinfo=timezone.utc`); naive datetimes break ES queries
-- `json.dumps(..., ensure_ascii=False)` for any JSON with CJK content
-- Error returns use `{"error": "...", "raw": ...}` dict pattern — never raise exceptions from `analyse()` or `build_report()`
-- `_update_job()` uses `WHERE rowid = (SELECT rowid ... ORDER BY rowid DESC LIMIT 1)` — not by job_id UUID
-
-## Elasticsearch Mode
-
-`config.yaml` `elasticsearch.mode` controls mock/local/remote:
-- `mock`: reads from `bob-analyser/mock/sample_logs.json`
-- `local`/`remote`: uses `elasticsearch-py` with scroll pagination (500/batch, max 5000 hits)
-- Field names are NOT hardcoded — always resolved through `config["field_mapping"]`
-
-## Bob Custom Mode
-
-`bob-analyser/bob-custom-modes/custom_modes.yaml` is copied to `/root/.bob/settings/custom_modes.yaml` at image build — this is bob 2.x's `globalScopeRoot` for custom modes. To update the `log-analyst` mode, edit that file and **rebuild the container**.
-
-## Environment
-
-`BOB_API_KEY` must be set in `bob-analyser/.env` (copy from `.env.example`). The container passes it to `bob run` via `env=` in `subprocess.run`. (`BOBSHELL_API_KEY` is kept for backward compatibility — both keys are accepted.)
-
-## Trigger Priority (`POST /analyse`)
-
-| Priority | Condition | `from_time` source |
-|---|---|---|
-| 1 | `from_time` provided | direct (Web UI / CLI) |
-| 2 | `lookback_minutes` provided | `to_time - lookback_minutes` (Kibana Alert) |
-| 3 | Neither, Checkpoint exists | resume from last `query_to` |
-| 4 | None of above | `now - config.checkpoint.default_lookback_minutes` (default 60 min) |
-
-## Key Files
-
-| File | Role |
-|------|------|
-| `bob-analyser/analysis_pipeline.py` | Pipeline orchestrator — import hub for all four stages |
-| `bob-analyser/api.py` | FastAPI app — all REST endpoints |
-| `bob-analyser/cli.py` | Click CLI — `run` / `history` / `show` subcommands |
-| `bob-analyser/analyser/extractor.py` | ES query + checkpoint read/write |
-| `bob-analyser/analyser/preprocessor.py` | Build event-sequence dict from raw logs |
-| `bob-analyser/analyser/bob_bridge.py` | Write JSON to `/workspace/logs/`, call `bob run`, parse result |
-| `bob-analyser/analyser/report_builder.py` | Generate PPTX via python-pptx + matplotlib |
-| `bob-analyser/bob-custom-modes/custom_modes.yaml` | Deployed as bob 2.x custom modes at build time |
-| `bob-analyser/config/config.yaml` | All runtime config — ES, field mapping, paths, checkpoint |
-| `bob-analyser/db/schema.sql` | SQLite schema for `analysis_jobs` + `checkpoint` tables |
-| `web/index.html` | Single-page Morandi dashboard (history, trigger, download) |
-| `docs/adr/0006-elasticsearch-alert-trigger.md` | ADR for Kibana Alert trigger design |
+- **Endpoints**: `POST /analyse` (409 busy, 208 deduplicated 5m), `POST /analyse/async`, `GET|DELETE /jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/status`, `GET /jobs/{id}/report`, `POST /demo/inject`
+- **Network**: `elk-analyser-web` (:3001), `elk-analyser` (10.89.1.10 & 10.89.2.50 :8080), `instana-agent` (10.89.2.5 :42699), `banking-app` (10.89.2.20 :9080/5672/8161), `banking-db` (10.89.2.10 :5432), `elasticsearch` (10.89.2.30 :9200), `logstash` (:31), `kibana` (:5601)
+- **Key Modules**: [`analysis_pipeline.py`](bob-analyser/analysis_pipeline.py), [`api.py`](bob-analyser/api.py), [`cli.py`](bob-analyser/cli.py), [`config_loader.py`](bob-analyser/config_loader.py), [`instana_collector.py`](bob-analyser/instana_collector.py), [`job_repository.py`](bob-analyser/db/job_repository.py), [`report_builder.py`](bob-analyser/analyser/report_builder.py), [`config.yaml`](bob-analyser/config/config.yaml), [`custom_modes.yaml`](bob-analyser/bob-custom-modes/custom_modes.yaml)

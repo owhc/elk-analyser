@@ -1,0 +1,37 @@
+# Updated: 2026-09-15 11:42:41 +0800
+# podman-compose.override.yml — Instana Java Agent 注入覆寫文件
+# ================================================================
+# 使用方式（從根目錄執行）：
+#   podman-compose -f podman-compose.yml -f podman-compose.override.yml up -d
+#
+# 前置條件：
+#   1. 從 Instana UI 下載 Java agent JAR
+#      More > Agents > Install Agent > Java > 下載 instana-agent.jar
+#      （或用 scripts/download-instana-agent.sh 自動下載）
+#
+#   2. 建立 Podman named volume 並放入 JAR：
+#      podman volume create instana-java-agent
+#      podman run --rm \
+#        -v instana-java-agent:/opt/instana-agent \
+#        -v $(pwd)/instana-agent.jar:/tmp/instana-agent.jar:ro \
+#        busybox cp /tmp/instana-agent.jar /opt/instana-agent/instana-agent.jar
+#
+# ================================================================
+
+version: "3.8"
+
+services:
+  banking-app:
+    volumes:
+      - instana-java-agent:/opt/instana-agent:ro,z
+      - ./japp-demo/container-japp/liberty-config/jvm.options:/opt/ibm/wlp/usr/servers/defaultServer/jvm.options:ro,z
+
+    environment:
+      # OpenJ9/Semeru：bootstrap no-op JAR 由 supervisord.conf JVM_ARGS 注入
+      # standalone-collector 由 Instana Host Agent late-attach 注入，不在此設定
+      INSTANA_SERVICE_NAME:  "banking-app-liberty"
+      INSTANA_TAGS:          "team=banking,env=staging,container=japp,framework=spring-boot"
+
+volumes:
+  instana-java-agent:
+    external: true

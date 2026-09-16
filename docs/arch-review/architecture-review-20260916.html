@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<!-- Created: 2026-09-16 07:53:21 +0800 -->
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="created" content="2026-09-16 07:53:21 +0800">
+<title>ELK Analyser — Architecture Review Report 2026-09-16</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --navy:#0f1e2e;--navy-mid:#162236;--navy-lt:#1e3050;
+  --accent:#2b7de9;--accent-lt:#60a5fa;
+  --text:#dce8f4;--text-muted:rgba(200,218,235,.72);--text-dim:rgba(200,218,235,.45);
+  --critical:#fb7185;--high:#fbbf24;--medium:#34d399;--low:#60a5fa;
+  --card:#1a2e46;--card-border:rgba(43,125,233,.18);
+  --ok-bg:rgba(52,211,153,.10);--ok-border:rgba(52,211,153,.25);
+  --warn-bg:rgba(251,191,36,.10);--warn-border:rgba(251,191,36,.25);
+  --err-bg:rgba(251,113,133,.10);--err-border:rgba(251,113,133,.25);
+  --font:'Segoe UI',system-ui,sans-serif;
+  --radius:8px;
+}
+body{background:var(--navy);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.65;}
+a{color:var(--accent-lt);text-decoration:none;}
+a:hover{text-decoration:underline;}
+
+/* LAYOUT */
+.page{max-width:1100px;margin:0 auto;padding:40px 28px 80px;}
+.header{background:linear-gradient(135deg,#0d1b2a 0%,#1a3550 60%,#112240 100%);
+  border-bottom:3px solid var(--accent);padding:48px 40px 36px;margin:-40px -28px 40px;
+  position:relative;overflow:hidden;}
+.header::before{content:'';position:absolute;right:-60px;top:-60px;width:280px;height:280px;
+  border-radius:50%;background:radial-gradient(circle,rgba(43,125,233,.15),transparent 70%);}
+.header h1{font-size:2.1rem;font-weight:700;letter-spacing:-.5px;
+  background:linear-gradient(90deg,#fff,#93c5fd);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.header .subtitle{color:var(--text-muted);margin-top:8px;font-size:.95rem;}
+.header .meta{display:flex;gap:24px;margin-top:20px;flex-wrap:wrap;}
+.meta-badge{background:rgba(43,125,233,.15);border:1px solid rgba(43,125,233,.3);
+  border-radius:20px;padding:4px 14px;font-size:.8rem;color:#93c5fd;}
+
+/* SCORE BAR */
+.score-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:28px 0;}
+.score-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius);
+  padding:18px 20px;position:relative;overflow:hidden;}
+.score-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;}
+.score-card.s-green::before{background:var(--medium);}
+.score-card.s-yellow::before{background:var(--high);}
+.score-card.s-red::before{background:var(--critical);}
+.score-card .label{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin-bottom:6px;}
+.score-card .score{font-size:2rem;font-weight:700;line-height:1;}
+.score-card .score.green{color:var(--medium);}
+.score-card .score.yellow{color:var(--high);}
+.score-card .score.red{color:var(--critical);}
+.score-card .score-sub{font-size:.8rem;color:var(--text-muted);margin-top:4px;}
+.bar{height:6px;background:rgba(255,255,255,.08);border-radius:3px;margin-top:10px;}
+.bar-fill{height:100%;border-radius:3px;transition:width .5s ease;}
+.bar-fill.green{background:var(--medium);}
+.bar-fill.yellow{background:var(--high);}
+.bar-fill.red{background:var(--critical);}
+
+/* SECTIONS */
+h2{font-size:1.3rem;font-weight:600;color:var(--accent-lt);margin:40px 0 16px;
+  padding-bottom:10px;border-bottom:1px solid rgba(43,125,233,.2);}
+h2 .icon{margin-right:8px;}
+h3{font-size:1rem;font-weight:600;color:var(--text);margin:24px 0 10px;}
+
+/* FINDING CARDS */
+.findings{display:flex;flex-direction:column;gap:12px;}
+.finding{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius);
+  padding:16px 18px 14px;position:relative;overflow:hidden;}
+.finding::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;}
+.finding.critical::before{background:var(--critical);}
+.finding.high::before{background:var(--high);}
+.finding.medium::before{background:var(--medium);}
+.finding.low::before{background:var(--low);}
+.finding.ok::before{background:var(--medium);}
+.finding-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.badge{font-size:.7rem;font-weight:700;letter-spacing:.06em;padding:2px 9px;border-radius:12px;text-transform:uppercase;}
+.badge.critical{background:var(--err-bg);border:1px solid var(--err-border);color:var(--critical);}
+.badge.high{background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--high);}
+.badge.medium{background:var(--ok-bg);border:1px solid var(--ok-border);color:var(--medium);}
+.badge.low{background:rgba(96,165,250,.10);border:1px solid rgba(96,165,250,.25);color:var(--low);}
+.badge.ok{background:var(--ok-bg);border:1px solid var(--ok-border);color:var(--medium);}
+.badge.info{background:rgba(96,165,250,.10);border:1px solid rgba(96,165,250,.25);color:#93c5fd;}
+.finding-title{font-weight:600;font-size:.95rem;}
+.finding p,.finding li{font-size:.88rem;color:var(--text-muted);line-height:1.6;}
+.finding ul{padding-left:18px;}
+.finding code{font-size:.82rem;background:rgba(43,125,233,.15);border-radius:3px;padding:1px 6px;color:#93c5fd;font-family:monospace;}
+.finding .rec{margin-top:10px;padding:10px 14px;background:rgba(43,125,233,.08);
+  border-left:3px solid var(--accent);border-radius:0 4px 4px 0;font-size:.85rem;color:var(--text);}
+.finding .rec strong{color:var(--accent-lt);}
+
+/* ARCH DIAGRAM */
+.arch-box{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius);
+  padding:24px;margin:20px 0;overflow:auto;}
+.arch-flow{display:flex;align-items:center;gap:0;flex-wrap:wrap;justify-content:center;}
+.arch-node{background:var(--navy-lt);border:1px solid rgba(43,125,233,.35);border-radius:6px;
+  padding:10px 16px;font-size:.82rem;text-align:center;white-space:nowrap;min-width:110px;}
+.arch-node .n-title{font-weight:700;color:var(--accent-lt);font-size:.88rem;}
+.arch-node .n-sub{color:var(--text-muted);font-size:.75rem;margin-top:3px;}
+.arch-arrow{color:var(--accent);font-size:1.2rem;padding:0 6px;flex-shrink:0;}
+.arch-group{background:rgba(43,125,233,.06);border:1px dashed rgba(43,125,233,.25);
+  border-radius:10px;padding:16px 20px;margin:16px 0;}
+.arch-group-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;
+  color:rgba(96,165,250,.7);margin-bottom:12px;}
+
+/* TABLE */
+.tbl-wrap{overflow-x:auto;margin:14px 0;}
+table{width:100%;border-collapse:collapse;font-size:.85rem;}
+th{background:rgba(43,125,233,.15);color:#93c5fd;font-weight:600;padding:10px 14px;
+  text-align:left;border-bottom:1px solid rgba(43,125,233,.25);}
+td{padding:9px 14px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:top;}
+tr:hover td{background:rgba(255,255,255,.02);}
+td code{background:rgba(43,125,233,.12);border-radius:3px;padding:1px 6px;font-family:monospace;}
+
+/* SUMMARY EXEC */
+.exec-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0;}
+@media(max-width:650px){.exec-grid{grid-template-columns:1fr;}}
+.exec-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius);padding:18px;}
+.exec-card h4{font-size:.85rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);margin-bottom:10px;}
+.exec-card ul{padding-left:16px;}
+.exec-card li{font-size:.87rem;color:var(--text-muted);margin-bottom:6px;}
+
+/* TOC */
+.toc{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius);
+  padding:20px 24px;margin:0 0 36px;}
+.toc h3{margin:0 0 12px;font-size:.9rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);}
+.toc ol{padding-left:20px;}
+.toc li{margin-bottom:6px;font-size:.88rem;}
+
+/* FOOTER */
+.footer{margin-top:60px;padding-top:24px;border-top:1px solid rgba(255,255,255,.06);
+  font-size:.78rem;color:var(--text-dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- HEADER -->
+<div class="header">
+  <h1>🔍 ELK Analyser — 架構審查報告</h1>
+  <p class="subtitle">全面架構健康度評估 · Demo 展示場景適用性分析</p>
+  <div class="meta">
+    <span class="meta-badge">📅 2026-09-16</span>
+    <span class="meta-badge">🎯 SDLC：Demo / PoC 展示階段</span>
+    <span class="meta-badge">🔬 審查範圍：全系統 7 個維度</span>
+    <span class="meta-badge">🏗 v1.x + Instana 整合</span>
+  </div>
+</div>
+
+<!-- OVERALL SCORES -->
+<h2><span class="icon">📊</span>整體評分概覽</h2>
+<div class="score-grid">
+  <div class="score-card s-green">
+    <div class="label">業務對齊</div>
+    <div class="score green">90</div>
+    <div class="score-sub">/ 100 — Demo 目標高度吻合</div>
+    <div class="bar"><div class="bar-fill green" style="width:90%"></div></div>
+  </div>
+  <div class="score-card s-yellow">
+    <div class="label">安全性</div>
+    <div class="score yellow">52</div>
+    <div class="score-sub">/ 100 — 多個 Demo 可接受但需標記的風險</div>
+    <div class="bar"><div class="bar-fill yellow" style="width:52%"></div></div>
+  </div>
+  <div class="score-card s-green">
+    <div class="label">可擴展性 / 效能</div>
+    <div class="score green">75</div>
+    <div class="score-sub">/ 100 — Demo 負載充足，生產前需改善</div>
+    <div class="bar"><div class="bar-fill green" style="width:75%"></div></div>
+  </div>
+  <div class="score-card s-green">
+    <div class="label">架構模式</div>
+    <div class="score green">82</div>
+    <div class="score-sub">/ 100 — 模組化設計清晰，少數耦合需改善</div>
+    <div class="bar"><div class="bar-fill green" style="width:82%"></div></div>
+  </div>
+  <div class="score-card s-green">
+    <div class="label">可維護性</div>
+    <div class="score green">80</div>
+    <div class="score-sub">/ 100 — 規則明確，少數技術債待處理</div>
+    <div class="bar"><div class="bar-fill green" style="width:80%"></div></div>
+  </div>
+  <div class="score-card s-yellow">
+    <div class="label">文件完整性</div>
+    <div class="score yellow">70</div>
+    <div class="score-sub">/ 100 — 核心文件齊全，API 缺 OpenAPI spec</div>
+    <div class="bar"><div class="bar-fill yellow" style="width:70%"></div></div>
+  </div>
+  <div class="score-card s-yellow">
+    <div class="label">12-Factor 合規</div>
+    <div class="score yellow">65</div>
+    <div class="score-sub">/ 100 — 6/12 完全符合，3 項有條件</div>
+    <div class="bar"><div class="bar-fill yellow" style="width:65%"></div></div>
+  </div>
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <h3>目錄</h3>
+  <ol>
+    <li><a href="#s1">系統架構概覽</a></li>
+    <li><a href="#s2">業務對齊（Demo 適用性）</a></li>
+    <li><a href="#s3">安全性與威脅模型</a></li>
+    <li><a href="#s4">可擴展性與效能</a></li>
+    <li><a href="#s5">架構模式與最佳實踐</a></li>
+    <li><a href="#s6">可維護性與技術債</a></li>
+    <li><a href="#s7">文件完整性</a></li>
+    <li><a href="#s8">12-Factor App 合規</a></li>
+    <li><a href="#s9">優先建議行動</a></li>
+  </ol>
+</div>
+
+<!-- ════════════════════════════════════════ -->
+<!-- S1: ARCH OVERVIEW -->
+<!-- ════════════════════════════════════════ -->
+<h2 id="s1"><span class="icon">🏗</span>系統架構概覽</h2>
+
+<div class="arch-box">
+  <div class="arch-group">
+    <div class="arch-group-title">觸發層（Trigger Layer）</div>
+    <div class="arch-flow">
+      <div class="arch-node"><div class="n-title">Kibana Alert</div><div class="n-sub">Webhook POST</div></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node"><div class="n-title">Web UI</div><div class="n-sub">port 3001</div></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node"><div class="n-title">CLI</div><div class="n-sub">podman exec</div></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node"><div class="n-title">REST API</div><div class="n-sub">POST /analyse</div></div>
+    </div>
+  </div>
+
+  <div class="arch-group" style="margin-top:12px;">
+    <div class="arch-group-title">分析管線（4-Stage Pipeline）</div>
+    <div class="arch-flow">
+      <div class="arch-node"><div class="n-title">extractor.py</div><div class="n-sub">ES 查詢 + Checkpoint</div></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node"><div class="n-title">preprocessor.py</div><div class="n-sub">事件序列建構 + Instana 注入</div></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node"><div class="n-title">bob_bridge.py</div><div class="n-sub">bob CLI AI 根因分析</div></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node"><div class="n-title">report_builder.py</div><div class="n-sub">PPTX 報告生成</div></div>
+    </div>
+  </div>
+
+  <div class="arch-group" style="margin-top:12px;">
+    <div class="arch-group-title">外部資料源</div>
+    <div class="arch-flow">
+      <div class="arch-node"><div class="n-title">Elasticsearch</div><div class="n-sub">banking-logs-* index</div></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node"><div class="n-title">Instana APM</div><div class="n-sub">Events + Metrics + Traces</div></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node"><div class="n-title">SQLite</div><div class="n-sub">history.db 任務 + Checkpoint</div></div>
+    </div>
+  </div>
+
+  <div class="arch-group" style="margin-top:12px;">
+    <div class="arch-group-title">Banking Demo Stack（japp-demo）</div>
+    <div class="arch-flow">
+      <div class="arch-node"><div class="n-title">WAS Liberty</div><div class="n-sub">port 9080</div></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node"><div class="n-title">Artemis MQ</div><div class="n-sub">bankingQueue</div></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node"><div class="n-title">PostgreSQL 16</div><div class="n-sub">port 5432</div></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node"><div class="n-title">Logstash</div><div class="n-sub">→ ES</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="tbl-wrap">
+  <table>
+    <thead><tr><th>服務</th><th>角色</th><th>技術棧</th><th>Port</th><th>IP</th></tr></thead>
+    <tbody>
+      <tr><td>elk-analyser</td><td>AI 分析後端</td><td>Python FastAPI + Bob CLI</td><td>8080</td><td>10.89.2.50</td></tr>
+      <tr><td>elk-analyser-web</td><td>前端儀表板</td><td>Nginx + HTML/JS</td><td>3001</td><td>10.89.1.x</td></tr>
+      <tr><td>banking-app</td><td>Demo 銀行應用</td><td>WAS Liberty + Artemis</td><td>9080/5672</td><td>10.89.2.20</td></tr>
+      <tr><td>banking-db</td><td>交易資料庫</td><td>PostgreSQL 16-alpine</td><td>5432</td><td>10.89.2.10</td></tr>
+      <tr><td>elasticsearch</td><td>日誌儲存</td><td>ES 8.13.4</td><td>9200</td><td>10.89.2.30</td></tr>
+      <tr><td>logstash</td><td>日誌管線</td><td>Logstash 8.13.4</td><td>5044</td><td>10.89.2.31</td></tr>
+      <tr><td>kibana</td><td>視覺化 / Alert</td><td>Kibana 8.13.4</td><td>5601</td><td>10.89.2.32</td></tr>
+      <tr><td>instana-agent</td><td>APM 收集器</td><td>Instana Host Agent</td><td>42699</td><td>10.89.2.5</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ════════════════════════════════════════ -->
+<!-- S2: BUSINESS ALIGNMENT -->
+<!-- ════════════════════════════════════════ -->
+<h2 id="s2"><span class="icon">🎯</span>業務對齊 — Demo 適用性</h2>
+
+<div class="findings">
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 達成</span><span class="finding-title">Demo 敘事完整：WAS Liberty → MQ → PostgreSQL 完整銀行場景</span></div>
+    <p>系統完整實作了一個可觀測的銀行交易日誌分析 Demo：從 WAS Liberty 產生日誌、Logstash 收集、ES 儲存，到 ELK Analyser 自動根因分析並輸出 PPTX 報告。<code>scripts/generate-observability-incident.sh</code> 提供端到端自動驗證能力，適合現場 Demo 使用。</p>
+  </div>
+
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 達成</span><span class="finding-title">多種觸發路徑清晰，Demo 靈活度高</span></div>
+    <p>支援 Kibana Alert Webhook（自動化）、Web UI（互動展示）、CLI（技術深度展示）、REST API（整合展示）四條路徑，Demo 時可針對不同受眾選擇最合適的觸發方式。</p>
+  </div>
+
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 達成</span><span class="finding-title">Instana APM 整合完成，增強可觀測性說服力</span></div>
+    <p>新增的 <code>instana_collector.py</code> 在同一時間窗口內整合 Instana Events、Endpoint Metrics（calls/errors/P95 latency）、Trace Summary 三類資料，並在 PPTX Slide 3.5 展示，有效展現 ELK + APM 聯合診斷能力。</p>
+  </div>
+
+  <div class="finding medium">
+    <div class="finding-header"><span class="badge medium">⚠️ 建議</span><span class="finding-title">README 缺 Instana 整合的快速啟動步驟</span></div>
+    <p>README 文件仍為 Instana 整合前的版本（2026-08-27），未包含 <code>INSTANA_API_TOKEN</code> 設定、<code>--with-instana</code> CLI flag 或 <code>webui_instana</code> trigger 說明，Demo 前需要口頭補充。</p>
+    <div class="rec"><strong>建議：</strong>更新 README 的「快速開始」區塊，新增「ELK + Instana 整合分析」段落。</div>
+  </div>
+
+  <div class="finding medium">
+    <div class="finding-header"><span class="badge medium">⚠️ 注意</span><span class="finding-title">Demo 資料注入 <code>POST /demo/inject</code> 時間固定為 2025 年</span></div>
+    <p>預設 <code>from_time="2025-01-15 08:00"</code> 與 <code>to_time="2025-01-15 09:00"</code> 固寫在 <code>DemoInjectRequest</code> 預設值中，Demo 時若不傳參數，報告時間戳記會顯示 2025 年，可能引起觀眾困惑。</p>
+    <div class="rec"><strong>建議：</strong>改為 <code>default_factory</code> 動態計算 <code>now - 1h</code> 至 <code>now</code>，或在 Web UI 的 Demo Inject 按鈕中傳入當前時間。</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ -->
+<!-- S3: SECURITY -->
+<!-- ════════════════════════════════════════ -->
+<h2 id="s3"><span class="icon">🔒</span>安全性與威脅模型</h2>
+<p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px;">⚠️ 以下發現多屬 <strong>Demo/PoC 可接受的已知取捨</strong>，正式生產環境部署前需逐項解決。</p>
+
+<div class="findings">
+  <div class="finding critical">
+    <div class="finding-header"><span class="badge critical">🚨 高風險 (Demo 可接受)</span><span class="finding-title">Instana Agent Key 硬編碼在 podman-compose.yml</span></div>
+    <p>Line 98-99：<code>INSTANA_AGENT_KEY: "uBp4GXpZQpKrHxMXNcvInQ"</code> 直接寫入 compose 檔案，已進入 git 追蹤範圍（git status 顯示為已修改）。若 repo 為公開或上傳至 IBM Internal git，key 將洩漏。</p>
+    <div class="rec"><strong>Demo 可接受，但：</strong>應改為 <code>${INSTANA_AGENT_KEY}</code> 並加入 <code>.env.example</code>；<code>.env</code> 列入 <code>.gitignore</code>。</div>
+  </div>
+
+  <div class="finding critical">
+    <div class="finding-header"><span class="badge critical">🚨 高風險 (Demo 可接受)</span><span class="finding-title">PostgreSQL 使用預設密碼，且明文暴露</span></div>
+    <p><code>DB_PASS: db2admin123</code> 在 compose 中明文存在，<code>POSTGRES_PASSWORD</code> 亦同。雖 Demo 環境可接受，但 banking-db port 50000 對外暴露，任何能存取主機的人均可連線。</p>
+    <div class="rec"><strong>正式部署前：</strong>使用 Podman secret 或外部 secret manager；至少確保 port 50000 不暴露到公共網路。</div>
+  </div>
+
+  <div class="finding high">
+    <div class="finding-header"><span class="badge high">⚠️ 中風險</span><span class="finding-title">FastAPI CORS 使用 allow_origins=["*"]</span></div>
+    <p><code>api.py</code> Line 59：<code>allow_origins=["*"]</code>，任何來源均可呼叫 API。雖然 API 位於 Podman 內網，但若 8080 端口暴露到可信邊界外，攻擊面會擴大。</p>
+    <div class="rec"><strong>建議：</strong>限制為 <code>["http://localhost:3001"]</code> 或依實際來源設定。</div>
+  </div>
+
+  <div class="finding high">
+    <div class="finding-header"><span class="badge high">⚠️ 中風險</span><span class="finding-title">Elasticsearch 無認證（xpack.security.enabled=false）</span></div>
+    <p>ES 9200 端口完全無認證保護，任何可觸及 japp-network 的容器或有 port mapping 的程序均可直接讀取所有 banking 日誌資料。</p>
+    <div class="rec"><strong>Demo 可接受，生產前：</strong>啟用 xpack.security，設定 ES 密碼並透過環境變數注入。</div>
+  </div>
+
+  <div class="finding medium">
+    <div class="finding-header"><span class="badge medium">📋 低風險</span><span class="finding-title">API 無認證端點，/demo/inject 可無限注入資料</span></div>
+    <p><code>POST /demo/inject</code> 無速率限制、無 API Key 保護，攻擊者可無限注入假資料造成 ES 磁碟耗盡或觸發大量分析任務。Demo 環境中此端點應只在受控環境暴露。</p>
+    <div class="rec"><strong>建議：</strong>加入 IP whitelist 或簡單 Bearer token 驗證；或僅在 demo 模式啟用此端點。</div>
+  </div>
+
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 良好</span><span class="finding-title">Secret 透過環境變數注入，AppConfig 正確覆蓋機制</span></div>
+    <p><code>AppConfig</code> 中 <code>INSTANA_API_TOKEN</code>、<code>ES_PASSWORD</code>、<code>BOB_API_KEY</code> 均採環境變數優先策略，不在程式碼中硬編碼 token 值。<code>.env.example</code> 提供清楚的範本。</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ -->
+<!-- S4: SCALABILITY / PERFORMANCE -->
+<!-- ════════════════════════════════════════ -->
+<h2 id="s4"><span class="icon">⚡</span>可擴展性與效能</h2>
+
+<div class="findings">
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 良好</span><span class="finding-title">threading.Lock 正確防止分析任務競態</span></div>
+    <p><code>api.py</code> 使用 <code>_analysis_lock = threading.Lock()</code> 確保同一時刻最多一個分析任務，避免 Checkpoint 競態與 Bob CLI subprocess 資源競爭。Async 路徑亦在 <code>_run_analysis_bg</code> 中正確使用 <code>blocking=False</code>。</p>
+  </div>
+
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 良好</span><span class="finding-title">ES 查詢限制 max_hits=5000，防止記憶體爆炸</span></div>
+    <p><code>config.yaml</code> 設定 <code>max_hits: 5000</code>，避免單次查詢傳回過多文件。Instana 收集也有類似限制（events 最多 50 筆）。</p>
+  </div>
+
+  <div class="finding high">
+    <div class="finding-header"><span class="badge high">⚠️ 效能風險</span><span class="finding-title">Bob CLI 以 subprocess 執行，單任務阻塞最長 120 秒</span></div>
+    <p><code>bob_bridge.py</code> 透過 <code>subprocess.run()</code> 同步阻塞呼叫 <code>bob run</code>，timeout=120s。FastAPI 的 async worker 在此期間完全被阻塞，不能接受其他請求。Demo 場景下可接受，但並發情境下會造成雪崩效應。</p>
+    <div class="rec"><strong>Demo 可接受。長期：</strong>使用 <code>asyncio.create_subprocess_exec</code> 或將 Bob 呼叫移至 ThreadPoolExecutor，解放 FastAPI event loop。</div>
+  </div>
+
+  <div class="finding medium">
+    <div class="finding-header"><span class="badge medium">⚠️ 注意</span><span class="finding-title">SQLite 單檔資料庫在高並發場景有 WAL 限制</span></div>
+    <p>分析歷史使用 SQLite（<code>/db/history.db</code>），<code>JobRepository</code> 每次操作均新開連線後關閉，雖避免長持連線問題，但高並發時 WAL 模式未明確開啟，可能造成 <code>SQLITE_LOCKED</code>。Demo 場景（單用戶）不會觸發此問題。</p>
+    <div class="rec"><strong>建議：</strong>在 <code>_conn()</code> 中執行 <code>PRAGMA journal_mode=WAL;</code>，提升讀寫並發性。</div>
+  </div>
+
+  <div class="finding medium">
+    <div class="finding-header"><span class="badge medium">⚠️ 注意</span><span class="finding-title">Instana 收集為同步呼叫，3 個 API 串行執行</span></div>
+    <p><code>instana_collector.collect()</code> 中 <code>collect_events</code>、<code>collect_endpoint_metrics</code>、<code>collect_trace_summary</code> 三個 Instana API 呼叫串行執行，各有 15s timeout，最差情況延遲達 45s 才進入分析管線。</p>
+    <div class="rec"><strong>建議：</strong>使用 <code>concurrent.futures.ThreadPoolExecutor</code> 並行發出三個請求，可將 Instana 收集時間從 ~45s 降至 ~15s。</div>
+  </div>
+
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 良好</span><span class="finding-title">Checkpoint 機制避免重複分析歷史日誌</span></div>
+    <p>四階段時間窗口優先序設計（from_time → lookback_minutes → Checkpoint → fallback）確保在自動觸發場景下不會重複分析已處理的日誌窗口，資源使用效率良好。</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ -->
+<!-- S5: ARCH PATTERNS -->
+<!-- ════════════════════════════════════════ -->
+<h2 id="s5"><span class="icon">🧩</span>架構模式與最佳實踐</h2>
+
+<div class="findings">
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 優秀</span><span class="finding-title">深模組設計：AppConfig、JobRepository 隱藏實作細節</span></div>
+    <p><code>AppConfig</code> 是 config.yaml 唯一解析 seam，型別化屬性完全隱藏 YAML 結構；<code>JobRepository</code> 集中所有 SQLite 操作，呼叫端不接觸 sqlite3。符合深模組（Deep Module）原則，減少介面複雜度。</p>
+  </div>
+
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 良好</span><span class="finding-title">管線（Pipeline）模式清晰，各階段職責單一</span></div>
+    <p>四階段管線（extract → preprocess → bob_bridge → report_builder）由 <code>run_analysis()</code> 統一協調，每個 module 有明確的輸入/輸出契約，可獨立測試和替換。</p>
+  </div>
+
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 良好</span><span class="finding-title">Instana 降級設計符合容錯原則</span></div>
+    <p><code>instana_collector</code> 任一子項目失敗只 warning，仍回傳部分資料（available=true）；Slide 3.5 僅 <code>available=true</code> 時插入，降級時報告結構不變，符合 graceful degradation 原則。</p>
+  </div>
+
+  <div class="finding high">
+    <div class="finding-header"><span class="badge high">⚠️ 設計問題</span><span class="finding-title"><code>instana_collector._load_config()</code> 與 AppConfig 架構不一致</span></div>
+    <p><code>instana_collector.py</code> Line 35 仍保留自有的 <code>_load_config()</code> 直讀 yaml，繞過 <code>AppConfig</code>。這違反了 AGENTS.md 的「Config Seam：Load solely via <code>AppConfig.load(config_path)</code>」規則，且導致 <code>ELK_CONFIG</code> 環境變數覆蓋對 instana_collector 無效。</p>
+    <div class="rec"><strong>建議：</strong>移除 <code>instana_collector._load_config()</code>，改為接受 <code>AppConfig</code> 實例或 <code>config_path</code> 並調用 <code>AppConfig.load()</code>，與整體架構保持一致。</div>
+  </div>
+
+  <div class="finding medium">
+    <div class="finding-header"><span class="badge medium">⚠️ 耦合</span><span class="finding-title">Instana endpoint metrics 硬編碼 banking-app-liberty 應用名稱</span></div>
+    <p><code>instana_collector.py</code> Line 142：<code>"value": "banking-app-liberty"</code> 硬編碼應用名稱，若 Demo 環境的 Instana 應用名稱不同，整個 endpoint metrics 收集會靜默失敗（回傳空列表）。</p>
+    <div class="rec"><strong>建議：</strong>從 <code>config.yaml instana.application_name</code> 讀取此值（已有 <code>application_id</code>，可擴充 <code>application_name</code>）。</div>
+  </div>
+
+  <div class="finding medium">
+    <div class="finding-header"><span class="badge medium">⚠️ 邊界</span><span class="finding-title">api.py 包含部分業務邏輯（_resolve_instana_context）</span></div>
+    <p><code>_resolve_instana_context()</code> 四段優先序邏輯位於 <code>api.py</code>，使 API 層承擔業務決策責任。此邏輯更適合放在 <code>analysis_pipeline.py</code> 或獨立的 <code>context_resolver.py</code>，讓 api.py 保持薄層。</p>
+    <div class="rec"><strong>建議：</strong>重構為 <code>analysis_pipeline.resolve_context()</code>，api.py 只負責 HTTP 解析和回應格式化。</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ -->
+<!-- S6: MAINTAINABILITY -->
+<!-- ════════════════════════════════════════ -->
+<h2 id="s6"><span class="icon">🔧</span>可維護性與技術債</h2>
+
+<div class="findings">
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 良好</span><span class="finding-title">明確的 Hard Rules 提升一致性</span></div>
+    <p>AGENTS.md 明確定義「No Exceptions」規則（<code>analyse()</code> & <code>build_report()</code> 只回傳 dict，不 raise）、timezone-aware datetime 規則、logging 規則，顯著降低維護時的犯錯機率。</p>
+  </div>
+
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 良好</span><span class="finding-title">完整的 ADR（架構決策紀錄）</span></div>
+    <p>6 個 ADR 完整記錄了關鍵技術選型決策（SQLite、Checkpoint 策略、Bob Bridge 通信方式等），新成員可快速理解設計背景，降低「為什麼這樣做」的反覆討論成本。</p>
+  </div>
+
+  <div class="finding high">
+    <div class="finding-header"><span class="badge high">⚠️ 技術債</span><span class="finding-title">缺乏單元測試，系統完全依賴手動端對端驗證</span></div>
+    <p>整個 <code>bob-analyser/</code> 目錄中無任何 <code>test_*.py</code> 或 <code>*_test.py</code> 文件。目前的驗證完全依賴 <code>scripts/generate-observability-incident.sh</code> 端對端腳本，重構或功能增加時無安全網。</p>
+    <div class="rec"><strong>建議（優先）：</strong>針對 <code>preprocessor.py</code>（事件分組邏輯）、<code>instana_collector.py</code>（資料正規化）加入 pytest 單元測試，這兩個模組最易出現靜默錯誤。</div>
+  </div>
+
+  <div class="finding medium">
+    <div class="finding-header"><span class="badge medium">⚠️ 待清理</span><span class="finding-title">requirements.txt 有過時的誤導性注釋</span></div>
+    <p>Line 13：<code># PPTX 報告生成（fallback 用；主要由 Bob Shell report-builder 產生）</code>，但實際上 <code>report_builder.py</code> 直接使用 python-pptx，Bob Shell 並未產生 PPTX。此注釋會誤導維護者。</p>
+    <div class="rec"><strong>建議：</strong>更新為「PPTX 報告生成（直接使用 python-pptx，在 container 內執行）」。</div>
+  </div>
+
+  <div class="finding medium">
+    <div class="finding-header"><span class="badge medium">⚠️ 注意</span><span class="finding-title">config_loader.py 保留 <code>raw</code> 屬性作向後相容過渡</span></div>
+    <p><code>AppConfig.raw</code> 屬性（Line 154）標記「向後相容，逐步移除」，但若使用者繼續依賴 raw dict 存取，遷移永遠不會完成。應追蹤是否仍有呼叫端使用此屬性。</p>
+    <div class="rec"><strong>建議：</strong>grep 確認是否仍有 <code>cfg.raw</code> 呼叫，若無則直接移除，避免累積技術債。</div>
+  </div>
+
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 良好</span><span class="finding-title">時區處理一致，所有 datetime 均 timezone-aware</span></div>
+    <p>AGENTS.md 明確規定且代碼遵守：所有 datetime 操作均使用 <code>replace(tzinfo=timezone.utc)</code> 或 <code>datetime.now(timezone.utc)</code>，避免時區混用問題。</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ -->
+<!-- S7: DOCUMENTATION -->
+<!-- ════════════════════════════════════════ -->
+<h2 id="s7"><span class="icon">📖</span>文件完整性</h2>
+
+<div class="findings">
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 良好</span><span class="finding-title">AGENTS.md 作為 AI 協作規則文件完整且最新</span></div>
+    <p>AGENTS.md 涵蓋 Stack 架構、Hard Rules、Quick Reference 指令、Key Modules 清單，2026-09-15 最新更新，包含 Instana 整合後的完整狀態，適合作為 AI 協作的上下文注入。</p>
+  </div>
+
+  <div class="finding ok">
+    <div class="finding-header"><span class="badge ok">✅ 良好</span><span class="finding-title">代碼文件字串（docstring）完整</span></div>
+    <p>所有主要模組（<code>api.py</code>、<code>analysis_pipeline.py</code>、<code>instana_collector.py</code>、<code>job_repository.py</code>）均有詳細的模組層 docstring，說明設計意圖、資料流、回傳格式等。</p>
+  </div>
+
+  <div class="finding high">
+    <div class="finding-header"><span class="badge high">⚠️ 缺失</span><span class="finding-title">無 OpenAPI/Swagger 規格文件</span></div>
+    <p>FastAPI 雖自動生成 <code>/docs</code> 端點，但無匯出的 OpenAPI spec 文件（<code>openapi.json</code>）。外部系統整合（如 Kibana Alert webhook 設定、CI/CD 測試）需要靜態 spec 文件。</p>
+    <div class="rec"><strong>建議：</strong>加入 <code>scripts/export-openapi.sh</code>，啟動 FastAPI 後呼叫 <code>GET /openapi.json</code> 儲存至 <code>docs/openapi.json</code>。</div>
+  </div>
+
+  <div class="finding medium">
+    <div class="finding-header"><span class="badge medium">⚠️ 過時</span><span class="finding-title">README.md 未反映 Instana 整合與新 API 端點</span></div>
+    <p>README 的功能列表、架構圖、API 端點表格均為 Instana 整合前版本，缺少：<code>DELETE /jobs</code>、<code>DELETE /jobs/{id}</code>、<code>GET /jobs/{id}/status</code>、<code>POST /demo/inject</code>、<code>--with-instana</code> CLI flag。</p>
+    <div class="rec"><strong>建議：</strong>更新 README API 端點表格和架構圖，並新增「Instana APM 整合」段落。</div>
+  </div>
+
+  <div class="finding low">
+    <div class="finding-header"><span class="badge low">📋 改善</span><span class="finding-title">docs/ 目錄有多個計劃文件但缺少狀態標記</span></div>
+    <p><code>docs/instana-integration-plan.md</code>、<code>docs/bob-integration-improvement-plan.md</code> 等計劃文件均已完成實作，但文件本身未標記「已實作」或「已關閉」，導致維護者難以判斷文件是否仍有效。</p>
+    <div class="rec"><strong>建議：</strong>在已完成的計劃文件頂部加入 <code>status: IMPLEMENTED</code> 標記。</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ -->
+<!-- S8: 12-FACTOR -->
+<!-- ════════════════════════════════════════ -->
+<h2 id="s8"><span class="icon">☁️</span>12-Factor App 合規</h2>
+
+<div class="tbl-wrap">
+  <table>
+    <thead><tr><th>#</th><th>Factor</th><th>狀態</th><th>說明</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>I</td><td>Codebase（單一 repo）</td>
+        <td><span class="badge ok">✅</span></td>
+        <td>單一 git repo，明確版本控制</td>
+      </tr>
+      <tr>
+        <td>II</td><td>Dependencies（明確宣告）</td>
+        <td><span class="badge ok">✅</span></td>
+        <td><code>requirements.txt</code> 列出所有 Python 依賴，Bob CLI 透過 Dockerfile <code>ARG BOB_VERSION</code> 版本化</td>
+      </tr>
+      <tr>
+        <td>III</td><td>Config（環境儲存設定）</td>
+        <td><span class="badge medium">⚠️</span></td>
+        <td>主要透過環境變數（BOB_API_KEY、INSTANA_API_TOKEN），但部分敏感值仍在 compose YAML 明文存在</td>
+      </tr>
+      <tr>
+        <td>IV</td><td>Backing Services（視為附加資源）</td>
+        <td><span class="badge ok">✅</span></td>
+        <td>ES、PostgreSQL、Instana 均透過 config 可切換（mode: mock/local/remote）</td>
+      </tr>
+      <tr>
+        <td>V</td><td>Build/Release/Run（分離）</td>
+        <td><span class="badge ok">✅</span></td>
+        <td>Dockerfile 明確 build stage，podman-compose 負責 run stage</td>
+      </tr>
+      <tr>
+        <td>VI</td><td>Processes（無狀態）</td>
+        <td><span class="badge medium">⚠️</span></td>
+        <td>SQLite 為有狀態依賴，但透過 volume mount 正確持久化；Checkpoint 寫入 DB 而非 local file 是正確選擇</td>
+      </tr>
+      <tr>
+        <td>VII</td><td>Port Binding（埠綁定）</td>
+        <td><span class="badge ok">✅</span></td>
+        <td>FastAPI 透過 uvicorn 自包含，port 8080 透過 compose ports 暴露</td>
+      </tr>
+      <tr>
+        <td>VIII</td><td>Concurrency（水平擴展）</td>
+        <td><span class="badge medium">⚠️</span></td>
+        <td>threading.Lock 限制單實例單任務，無法水平擴展。Demo 可接受，生產需 task queue</td>
+      </tr>
+      <tr>
+        <td>IX</td><td>Disposability（快速啟停）</td>
+        <td><span class="badge ok">✅</span></td>
+        <td>有 healthcheck，restart: unless-stopped，graceful shutdown 可接受</td>
+      </tr>
+      <tr>
+        <td>X</td><td>Dev/Prod Parity（環境一致）</td>
+        <td><span class="badge ok">✅</span></td>
+        <td>ES mode mock/local/remote 切換，demo/staging/prod 有清晰路徑</td>
+      </tr>
+      <tr>
+        <td>XI</td><td>Logs（串流至 stdout）</td>
+        <td><span class="badge medium">⚠️</span></td>
+        <td>使用 logging 模組（✅），但 Dockerfile 未設定 log driver，容器日誌管理依賴 Podman 預設</td>
+      </tr>
+      <tr>
+        <td>XII</td><td>Admin Processes（管理任務）</td>
+        <td><span class="badge high">⚠️</span></td>
+        <td>無獨立的 migration runner；schema 初始化在 Dockerfile build 時執行（<code>RUN python -c ...</code>），volume mount 後需在 entrypoint 重建，邏輯分散</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ════════════════════════════════════════ -->
+<!-- S9: PRIORITY ACTIONS -->
+<!-- ════════════════════════════════════════ -->
+<h2 id="s9"><span class="icon">🚀</span>優先建議行動</h2>
+
+<div class="exec-grid">
+  <div class="exec-card">
+    <h4>🔴 Demo 前（Critical）</h4>
+    <ul>
+      <li>將 Instana Agent Key 移至 <code>.env</code>，從 <code>podman-compose.yml</code> 移除硬編碼</li>
+      <li>更新 README 加入 Instana 整合快速啟動說明</li>
+      <li><code>POST /demo/inject</code> 改為動態計算時間窗口，避免 2025 年時間戳記</li>
+    </ul>
+  </div>
+  <div class="exec-card">
+    <h4>🟡 近期技術改善（High）</h4>
+    <ul>
+      <li>移除 <code>instana_collector._load_config()</code>，改用 <code>AppConfig</code></li>
+      <li>Instana 三個 API 呼叫改為並行（ThreadPoolExecutor），減少等待時間</li>
+      <li>加入 <code>PRAGMA journal_mode=WAL</code> 改善 SQLite 並發</li>
+      <li>修正 CORS 允許來源，移除 <code>allow_origins=["*"]</code></li>
+    </ul>
+  </div>
+  <div class="exec-card">
+    <h4>🟢 中期質量改善（Medium）</h4>
+    <ul>
+      <li>為 <code>preprocessor.py</code> 和 <code>instana_collector.py</code> 新增 pytest 單元測試</li>
+      <li>將 <code>_resolve_instana_context</code> 從 api.py 移至 analysis_pipeline</li>
+      <li>將 Instana 應用名稱從硬編碼改為 config 讀取</li>
+      <li>匯出 OpenAPI spec 文件（<code>docs/openapi.json</code>）</li>
+    </ul>
+  </div>
+  <div class="exec-card">
+    <h4>🔵 長期架構改善（Low）</h4>
+    <ul>
+      <li>Bob CLI subprocess 改為 asyncio 非阻塞執行，解放 FastAPI event loop</li>
+      <li>生產環境評估以 PostgreSQL 取代 SQLite（支援水平擴展）</li>
+      <li>加入 task queue（Redis + Celery/RQ）支援多 worker 並發分析</li>
+      <li>已完成計劃文件加入 <code>status: IMPLEMENTED</code> 標記</li>
+    </ul>
+  </div>
+</div>
+
+<!-- EXECUTIVE SUMMARY -->
+<h2><span class="icon">📋</span>執行摘要</h2>
+<div class="finding ok" style="margin-bottom:0;">
+  <div class="finding-header"><span class="badge ok">✅ 整體評估</span><span class="finding-title">Demo 展示目標達成度高，具備生產演進路徑</span></div>
+  <p>ELK Analyser 在 Demo / PoC 階段展示了清晰的技術故事：ELK 日誌分析 + Instana APM 聯合可觀測性 + Bob AI 根因分析 + PPTX 報告輸出。架構設計遵循深模組原則，Hard Rules 明確，核心管線職責清晰。</p>
+  <p style="margin-top:8px;">主要關注點集中在<strong>安全性</strong>（Demo 已知取捨：硬編碼密鑰、無認證 ES）和<strong>可擴展性</strong>（同步 Bob CLI subprocess、單 threading.Lock 任務互斥），但這些在 Demo 場景下均屬預期設計決策。</p>
+  <p style="margin-top:8px;"><strong>最高優先行動：</strong>Demo 前將 Instana Agent Key 移至 .env，更新 README 加入 Instana 整合說明，修正 demo/inject 的固定 2025 年時間戳記，確保現場展示效果最佳。</p>
+</div>
+
+<div class="footer">
+  ELK Analyser Architecture Review · 生成於 2026-09-16 07:53:21 +0800 · 範圍：全系統 7 維度審查
+</div>
+
+</div>
+</body>
+</html>

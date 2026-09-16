@@ -1,0 +1,29 @@
+# Logstash Containerfile - Banking Demo
+# Updated: 2026-09-02 16:20:51 +0800
+#
+# 此 Containerfile 為可選方案。
+# 若使用 podman-compose 以 volume mount 掛載設定檔，可直接使用官方 image
+# 無需 build 此 image。
+#
+# 使用時機：需要預烘焙（pre-baked）設定至 image 時（如 CI/CD 分發）。
+
+FROM docker.elastic.co/logstash/logstash:8.13.4
+
+# 移除預設 pipeline（避免與自訂 pipeline.conf 衝突）
+RUN rm -f /usr/share/logstash/pipeline/logstash.conf
+
+# 複製自訂設定
+COPY logstash.yml  /usr/share/logstash/config/logstash.yml
+COPY pipeline.conf /usr/share/logstash/pipeline/pipeline.conf
+
+# 建立 sincedb 資料目錄並設定正確擁有者
+USER root
+RUN mkdir -p /usr/share/logstash/data && \
+    chown -R logstash:logstash /usr/share/logstash/data && \
+    chown logstash:logstash /usr/share/logstash/config/logstash.yml && \
+    chown logstash:logstash /usr/share/logstash/pipeline/pipeline.conf
+
+USER logstash
+
+# 開放 HTTP API port（健康檢查用）
+EXPOSE 9600

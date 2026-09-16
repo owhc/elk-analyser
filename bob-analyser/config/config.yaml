@@ -1,21 +1,25 @@
-# Updated: 2026-08-27 17:20:49 +0800
+# Updated: 2026-09-15 21:41:20 +0800
 # ELK Analyser 主設定檔
 # 所有連線參數、欄位映射、排程設定均在此集中管理
 
 # ── Elasticsearch 連線設定 ──────────────────────────────────────────
 elasticsearch:
-  # 開發階段設為 mock，正式環境改為 remote
-  mode: mock                        # mock | local | remote
-  host: "localhost"
+  # local = 對接 japp-demo ELK Stack 的真實 Elasticsearch
+  # mock  = 使用本機 mock 資料（離線開發用）
+  # remote = 對接外部 ES 叢集
+  mode: local                       # mock | local | remote
+  # japp-network 內的 ES service hostname（podman-compose 服務名稱解析）
+  # 本機直連時可改為 localhost
+  host: "elasticsearch"
   port: 9200
-  scheme: "http"                    # http | https
+  scheme: "http"                    # http | https（japp-demo ES 已關閉 xpack.security）
   # 正式環境 TLS 設定（mode: remote 時啟用）
   # ca_cert: "/certs/ca.crt"
   # client_cert: "/certs/client.crt"
   # client_key: "/certs/client.key"
   username: ""
-  password: ""                      # 留空；正式環境請設定環境變數 ES_PASSWORD（AppConfig 會自動覆蓋）
-  index_pattern: "app-logs-*"       # 查詢目標索引 pattern
+  password: ""                      # Demo 環境 security 已關閉，無需密碼；正式環境設 ES_PASSWORD 環境變數
+  index_pattern: "banking-logs-*"   # 對應 japp-demo Logstash 輸出的 index 命名
   timeout: 30                       # 查詢逾時秒數
 
 # ── 欄位映射（對應不同 ELK schema）──────────────────────────────────
@@ -23,7 +27,7 @@ field_mapping:
   timestamp: "@timestamp"           # 時間欄位名稱
   level: "log.level"                # 日誌等級欄位
   message: "message"                # 訊息欄位
-  service: "service.name"           # 服務/模組名稱
+  service: "service"                # japp-demo Logstash mutate add_field 輸出的欄位名稱
   trace_id: "trace.id"              # Trace ID（用於事件分組）
   host: "host.name"                 # 主機名稱
   # 若欄位不存在則自動 fallback，無需修改程式碼
@@ -73,3 +77,13 @@ webhook:
   url: ""                           # 例：https://hooks.slack.com/...
   # on_complete: true
   # on_error: true
+
+# ── Instana APM 整合（選用）─────────────────────────────────────────
+# enabled=true 時，trigger=kibana_alert_instana / webui_instana 路徑
+# 將自動向 Instana 查詢同時間窗口的 APM 歷史資料，合併至分析報告。
+instana:
+  enabled: true                     # true = 啟用 Instana 整合；false = 純 ELK 模式
+  base_url: "https://ibmdevsandbox-instanaibm.instana.io"
+  api_token: ""                     # 設定 INSTANA_API_TOKEN 環境變數，或直接填入（不建議）
+  application_id: "XdhrXfC4QYqm2ixHSlY5dQ"   # banking-app-liberty
+  collect_infra_metrics: false      # true = 額外收集 JVM / Artemis metrics（可選）

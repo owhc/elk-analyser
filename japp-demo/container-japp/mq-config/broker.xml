@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  broker.xml — ActiveMQ Artemis AMQP acceptor 自訂設定
+  覆蓋方式：在 podman-compose.yml 中以 volume mount 覆蓋
+    volumes:
+      - ./container-japp/mq-config/broker.xml:/var/lib/artemis-broker/etc/broker.xml
+
+  此設定確保：
+  - AMQP acceptor 固定監聽 0.0.0.0:5672
+  - 預先定義 bankingQueue / bankingReplyQueue（持久化佇列）
+  - 管理 UI 在 8161 port
+
+  如需修改佇列，重新掛載此檔案並重啟容器即可，不需重建 image。
+-->
+<configuration xmlns="urn:activemq"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:schemaLocation="urn:activemq /schema/artemis-configuration.xsd">
+
+  <core xmlns="urn:activemq:core"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="urn:activemq:core">
+
+    <name>artemis-broker</name>
+
+    <!-- 持久化資料目錄 -->
+    <data-directory>/var/lib/artemis-broker/data</data-directory>
+
+    <!-- ─── Acceptors ──────────────────────────────────────────────── -->
+    <acceptors>
+      <!-- AMQP 1.0 acceptor（JMS / MQ Light 相容） -->
+      <acceptor name="amqp">
+        tcp://0.0.0.0:5672?protocols=AMQP;useEpoll=true;amqpCredits=1000;amqpLowCredits=300
+      </acceptor>
+      <!-- 內部 Artemis core protocol（選用，供管理工具使用） -->
+      <acceptor name="artemis">
+        tcp://0.0.0.0:61616?protocols=CORE,AMQP,STOMP,HORNETQ,MQTT,OPENWIRE
+      </acceptor>
+    </acceptors>
+
+    <!-- ─── 安全設定（demo：允許匿名） ───────────────────────────── -->
+    <security-enabled>true</security-enabled>
+
+    <security-settings>
+      <security-setting match="#">
+        <permission type="createNonDurableQueue" roles="amq,admin"/>
+        <permission type="deleteNonDurableQueue" roles="amq,admin"/>
+        <permission type="createDurableQueue"    roles="amq,admin"/>
+        <permission type="deleteDurableQueue"    roles="amq,admin"/>
+        <permission type="createAddress"         roles="amq,admin"/>
+        <permission type="deleteAddress"         roles="amq,admin"/>
+        <permission type="consume"               roles="amq,admin"/>
+        <permission type="browse"                roles="amq,admin"/>
+        <permission type="send"                  roles="amq,admin"/>
+        <permission type="manage"                roles="amq,admin"/>
+      </security-setting>
+    </security-settings>
+
+    <!-- ─── 地址（預先定義佇列）─────────────────────────────────── -->
+    <addresses>
+      <!-- 銀行業務主佇列：Liberty REST layer 發送 MQ 訊息至此 -->
+      <address name="bankingQueue">
+        <anycast>
+          <queue name="bankingQueue">
+            <durable>true</durable>
+          </queue>
+        </anycast>
+      </address>
+
+      <!-- 回覆佇列：MDB 處理完後回寫查詢結果（供 JmsTemplate.sendAndReceive 使用） -->
+      <address name="bankingReplyQueue">
+        <anycast>
+          <queue name="bankingReplyQueue">
+            <durable>true</durable>
+          </queue>
+        </anycast>
+      </address>
+    </addresses>
+
+    <!-- ─── 記憶體與頁面設定（demo 低記憶體模式）────────────────── -->
+    <global-max-size>100Mb</global-max-size>
+
+    <address-settings>
+      <address-setting match="#">
+        <dead-letter-address>DLQ</dead-letter-address>
+        <expiry-address>ExpiryQueue</expiry-address>
+        <redelivery-delay>0</redelivery-delay>
+        <max-size-bytes>10485760</max-size-bytes><!-- 10 MB per queue -->
+        <page-size-bytes>1048576</page-size-bytes><!-- 1 MB -->
+        <message-counter-history-day-limit>10</message-counter-history-day-limit>
+        <address-full-policy>PAGE</address-full-policy>
+      </address-setting>
+    </address-settings>
+
+  </core>
+</configuration>

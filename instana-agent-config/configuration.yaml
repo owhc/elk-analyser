@@ -1,0 +1,71 @@
+# Updated: 2026-09-03 20:52:37 +0800
+# Instana Agent Sensor Configuration — japp-demo
+# 掛載至容器：instana-agent-config:/opt/instana/agent/etc/instana
+# ================================================================
+
+# ─── Agent 網路監聽設定 ──────────────────────────────────────────
+# 預設只監聽 127.0.0.1，跨容器 JVM 無法回連 → 改為監聽所有介面
+com.instana.agent.main.sender.Backend:
+  host: ingress-orange-saas.instana.io
+  port: 443
+  protocol: HTTP/2
+
+com.instana.agent:
+  listenAddress: 0.0.0.0
+
+# ─── WAS Liberty 監控 ────────────────────────────────────────────
+# Instana 透過 Liberty mpMetrics + JMX 抓取 HTTP / JDBC pool 指標
+com.instana.plugin.liberty:
+  enabled: true
+  # banking-app 在 japp-network 內的固定 IP
+  host: 10.89.2.20
+  port: 9080
+
+# ─── Java JVM 監控（由 Java Trace Agent 自動回報）──────────────
+# 無需額外設定，Java agent (-javaagent) 注入後自動上報 JVM heap/GC/thread
+com.instana.plugin.java:
+  enabled: true
+
+# ─── ActiveMQ Artemis 監控 ────────────────────────────────────────
+# Instana activemqartemis sensor 透過 Jolokia HTTP REST 讀取 JMX MBean
+# Artemis 預設在 8161 提供 Jolokia endpoint：/console/jolokia
+com.instana.plugin.activemqartemis:
+  enabled: true
+  remote: true
+  host: 10.89.2.20   # banking-app 固定 IP
+  port: 8161
+  username: admin
+  password: admin123
+
+# ─── PostgreSQL 監控 ──────────────────────────────────────────────
+# Instana postgresql sensor 透過 pg_stat_* 系統 view 收集指標
+# 需確保 db2inst1 已持有 pg_monitor role（見 README 步驟七）
+com.instana.plugin.postgresql:
+  enabled: true
+  remote: true
+  host: 10.89.2.10   # banking-db 固定 IP
+  port: 5432
+  username: db2inst1
+  password: db2admin123
+  databases:
+    - name: bankdb
+      username: db2inst1
+      password: db2admin123
+
+# ─── Docker / Podman 感知 ───────────────────────────────────────
+# macOS 上 Podman socket 無法從容器內存取，停用避免持續報錯
+com.instana.plugin.docker:
+  enabled: false
+
+# ─── Process 感知 ────────────────────────────────────────────────
+com.instana.plugin.process:
+  processes:
+    - "supervisord"
+    - "java"
+    - "postgres"
+
+# ─── Java JVM external attach 設定 ──────────────────────────────
+# 讓 agent 主動 attach 到已帶 -javaagent 的 Liberty JVM
+com.instana.plugin.javatrace:
+  instrumentation:
+    enabled: true

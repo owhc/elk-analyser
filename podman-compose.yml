@@ -1,47 +1,64 @@
-# Updated: 2026-08-26 18:02:32 +0800
-# podman-compose.yml
-# elk-analyser 專案獨立網路（elk-analyser-network）
+# Updated: 2026-09-15 22:12:50 +0800
+# podman-compose.yml — 整合版（elk-analyser + japp-demo 一次 deploy）
 #
-# 使用方式：
-#   podman-compose -f podman-compose.yml up -d
+# ── 先決條件 ───────────────────────────────────────────────────────
+#   1. 編譯 Spring Boot WAR（首次或程式碼變更後）：
+#      cd japp-demo/banking-app && mvn clean package -DskipTests && cd ../..
 #
-# 觸發分析方式：Web UI / 手動 CLI / Elasticsearch Alert → POST /analyse
+#   2. 確認 bob-analyser/.env 存在（BOB_API_KEY 已填入）
+#
+# ── 啟動 ───────────────────────────────────────────────────────────
+#   podman-compose up -d
+#
+# ── 首次 PostgreSQL schema 初始化（容器啟動時自動載入）────────────
+#   podman exec banking-db psql -U db2inst1 -d bankdb -f /docker-entrypoint-initdb.d/01-schema.sql
+#
+# ── 服務清單 ───────────────────────────────────────────────────────
+#   elk-analyser-web  :3001  — ELK Analyser Nginx 前端
+#   elk-analyser      :8080  — ELK Analyser FastAPI 後端
+#   banking-app       :9080  — WAS Liberty 銀行應用 / :5672 Artemis MQ
+#   banking-db        :50000 — PostgreSQL 資料庫
+#   elasticsearch     :9200  — Elasticsearch 8.x
+#   logstash          :5044  — Logstash（日誌收集）
+#   kibana            :5601  — Kibana（視覺化）
 
 services:
-  # ── Web UI（Nginx 靜態前端 + API proxy）────────────────────────
+
+  # ════════════════════════════════════════════════════════════════
+  # ELK ANALYSER 群組
+  # ════════════════════════════════════════════════════════════════
+
+  # ── Web UI（Nginx 靜態前端 + API proxy）──────────────────────────
   web:
     build:
       context: ./web
       dockerfile: Dockerfile
     container_name: elk-analyser-web
     ports:
-      - "3001:80"         # 瀏覽器開啟 http://localhost:3001
+      - "3001:80"           # ELK Analyser UI
     networks:
       - elk-analyser-network
     restart: unless-stopped
     depends_on:
       - elk-analyser
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:80"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 5s
 
+  # ── ELK Analyser FastAPI 後端 ────────────────────────────────────
   elk-analyser:
     build:
       context: ./bob-analyser
       dockerfile: Dockerfile
     container_name: elk-analyser
     ports:
-      - "8080:8080"       # FastAPI REST API
+      - "8080:8080"         # FastAPI REST API
     volumes:
-      # 與 bob-sandbox 共享：事件序列 JSON 傳遞媒介
-      # 使用與 ai-sdlc-flow 相同的 named volume
       - bob_workspace:/workspace
-      # PPTX 報告輸出目錄
       - elk_reports:/reports
-      # SQLite 持久化（僅本 container）
       - elk_db:/db
     environment:
       - BOBSHELL_API_KEY=${BOBSHELL_API_KEY:-${BOB_API_KEY}}
@@ -51,28 +68,282 @@ services:
       - ./bob-analyser/.env
     networks:
       elk-analyser-network:
-        ipv4_address: 10.89.1.10   # 固定 IP，避免 restart 後 Nginx DNS 快取失效
+        ipv4_address: 10.89.1.10    # 固定 IP，避免 Nginx DNS 快取失效
+      japp-network:
+        ipv4_address: 10.89.2.50    # 固定 IP，確保 DNS 解析 elasticsearch hostname
     restart: unless-stopped
+    depends_on:
+      - elasticsearch
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
 
-# ── 網路：elk-analyser 專案自有網路 ──────────────────────────────────
+  # ════════════════════════════════════════════════════════════════
+  # INSTANA HOST AGENT
+  # ════════════════════════════════════════════════════════════════
+
+  instana-agent:
+    image: icr.io/instana/agent:latest
+    container_name: bankingdemo-elk-analyzer-agent
+    hostname: bankingdemo-elk-analyzer-agent
+    restart: unless-stopped
+    privileged: true
+    pid: host
+    volumes:
+      - instana-agent-config:/opt/instana/agent/etc/instana
+    environment:
+      INSTANA_AGENT_KEY:            "uBp4GXpZQpKrHxMXNcvInQ"
+      INSTANA_DOWNLOAD_KEY:         "uBp4GXpZQpKrHxMXNcvInQ"
+      INSTANA_AGENT_ENDPOINT:       "ingress-orange-saas.instana.io"
+      INSTANA_AGENT_ENDPOINT_PORT:  "443"
+      INSTANA_AGENT_ZONE:           "japp-demo-local"
+      INSTANA_AGENT_TAGS:           "team=banking,env=staging"
+      # 讓 agent HTTP server 綁定所有介面，跨容器 JVM 才能回連 42699
+      INSTANA_AGENT_HTTP_LISTEN:    "0.0.0.0"
+      JAVA_OPTS:                    "-Dagent.http.listen=0.0.0.0"
+      TZ: ${TZ:-Asia/Taipei}
+    networks:
+      japp-network:
+        ipv4_address: 10.89.2.5
+    ports:
+      - "42699:42699"               # Java trace agent 回報 port
+
+  # ════════════════════════════════════════════════════════════════
+  # JAPP 群組（銀行應用 + 資料庫）
+  # ════════════════════════════════════════════════════════════════
+
+  # ── WAS Liberty + ActiveMQ Artemis + Spring Boot WAR ───────────
+  banking-app:
+    build:
+      context: ./japp-demo
+      dockerfile: container-japp/Containerfile
+    container_name: banking-app
+    hostname: banking-app
+    restart: on-failure
+    mem_limit: 1200m
+    env_file:
+      - ./japp-demo/.env
+    ports:
+      - "0.0.0.0:${LIBERTY_HTTP_PORT:-9080}:9080"   # WAS Liberty HTTP（銀行網站）
+      - "0.0.0.0:${LIBERTY_HTTPS_PORT:-9443}:9443"  # WAS Liberty HTTPS
+      - "0.0.0.0:${ARTEMIS_PORT:-5672}:5672"         # ActiveMQ Artemis AMQP
+      - "0.0.0.0:${ARTEMIS_MGMT_PORT:-8161}:8161"   # Artemis 管理 UI
+    volumes:
+      # Liberty 設定（volume mount，不重建 image）
+      - ./japp-demo/container-japp/liberty-config/server.xml:/config/server.xml:z
+      - ./japp-demo/container-japp/liberty-config/bootstrap.properties:/config/bootstrap.properties:z
+      # WAR 熱部署（掛載 deploy/ 目錄，cp 指令更新 WAR 不影響 inode bind mount）
+      - ./japp-demo/banking-app/deploy:/config/dropins:z
+      # Artemis broker.xml（含 bankingQueue + bankingReplyQueue 預建立設定）
+      - ./japp-demo/container-japp/broker.xml:/var/lib/artemis-broker/etc/broker.xml:z
+      # 共享日誌 volume（Logstash 讀取）
+      - app_logs:/logs:z
+    environment:
+      TZ: ${TZ:-Asia/Taipei}
+      DB_HOST: banking-db
+      DB_PORT: 5432                    # PostgreSQL 容器內部 port（主機端 50000 映射至此）
+      DB_NAME: ${DB_NAME:-bankdb}      # PostgreSQL 資料庫名稱（小寫）
+      DB_USER: ${DB_USER:-db2inst1}
+      DB_PASS: ${DB_PASS:-db2admin123}
+      MQ_HOST: localhost
+      MQ_PORT: ${ARTEMIS_PORT:-5672}
+      MQ_USER: ${ARTEMIS_USER:-admin}
+      MQ_PASS: ${ARTEMIS_PASS:-admin123}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:-}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f --max-time 3 http://localhost:9080/banking-app/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    networks:
+      japp-network:
+        ipv4_address: 10.89.2.20
+    depends_on:
+      - banking-db
+
+  # ── PostgreSQL 16 ───────────────────────────────────────────────
+  # 使用 postgres:16-alpine，schema 見 postgres-config/schema-postgres.sql
+  banking-db:
+    image: postgres:16-alpine
+    container_name: banking-db
+    hostname: banking-db
+    restart: on-failure
+    ports:
+      - "${DB_PORT:-50000}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data:z
+      # postgres image 啟動時自動執行 /docker-entrypoint-initdb.d/*.sql
+      - ./japp-demo/container-japp/postgres-config/schema-postgres.sql:/docker-entrypoint-initdb.d/01-schema.sql:z
+      - app_logs:/logs:z
+    environment:
+      POSTGRES_DB: ${DB_NAME:-bankdb}
+      POSTGRES_USER: ${DB_USER:-db2inst1}
+      POSTGRES_PASSWORD: ${DB_PASS:-db2admin123}
+      TZ: ${TZ:-Asia/Taipei}
+    # 先以 root 建立並授權共享日誌目錄，再交由官方 entrypoint 降權啟動 PostgreSQL。
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /logs/postgres
+        chown postgres:postgres /logs/postgres
+        exec docker-entrypoint.sh postgres \
+          -c logging_collector=on \
+          -c log_destination=stderr \
+          -c log_directory=/logs/postgres \
+          -c log_filename=postgresql-%Y-%m-%d.log \
+          -c log_file_mode=0644 \
+          -c log_line_prefix='%m [%p] %q%u@%d ' \
+          -c log_min_messages=info \
+          -c log_min_error_statement=error
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-db2inst1} -d ${DB_NAME:-bankdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      japp-network:
+        ipv4_address: 10.89.2.10
+
+  # ════════════════════════════════════════════════════════════════
+  # ELK STACK 群組（Elasticsearch + Logstash + Kibana）
+  # ════════════════════════════════════════════════════════════════
+
+  # ── Elasticsearch 8.x（單節點，關閉 Security）───────────────────
+  elasticsearch:
+    image: ${ES_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch:8.13.4}
+    container_name: japp-elasticsearch
+    hostname: elasticsearch
+    restart: on-failure
+    ports:
+      - "${ES_PORT:-9200}:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data:z
+      - ./japp-demo/container-b/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:z
+    environment:
+      TZ: ${TZ:-Asia/Taipei}
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.ml.enabled: "false"
+      xpack.monitoring.collection.enabled: "false"
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms256m -Xmx512m}
+      bootstrap.memory_lock: "false"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      japp-network:
+        ipv4_address: 10.89.2.30
+
+  # ── Logstash 8.x（解析 Liberty/MQ/PostgreSQL 日誌）──────────────
+  logstash:
+    image: ${LOGSTASH_IMAGE:-docker.elastic.co/logstash/logstash:8.13.4}
+    container_name: japp-logstash
+    hostname: logstash
+    restart: on-failure
+    ports:
+      - "${LOGSTASH_PORT:-5044}:5044"
+    volumes:
+      - ./japp-demo/container-b/logstash/pipeline.conf:/usr/share/logstash/pipeline/pipeline.conf:z
+      - ./japp-demo/container-b/logstash/logstash.yml:/usr/share/logstash/config/logstash.yml:z
+      - app_logs:/logs:ro,z
+    environment:
+      TZ: ${TZ:-Asia/Taipei}
+      LS_JAVA_OPTS: "-Xms256m -Xmx256m"
+    depends_on:
+      - elasticsearch
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9600 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    networks:
+      japp-network:
+        ipv4_address: 10.89.2.31
+
+  # ── Kibana 8.x（視覺化，port 5601 供 elk-analyser 連線）────────
+  kibana:
+    image: ${KIBANA_IMAGE:-docker.elastic.co/kibana/kibana:8.13.4}
+    container_name: japp-kibana
+    hostname: kibana
+    restart: on-failure
+    ports:
+      - "${KIBANA_PORT:-5601}:5601"
+    volumes:
+      - ./japp-demo/container-b/kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:z
+    environment:
+      TZ: ${TZ:-Asia/Taipei}
+      ELASTICSEARCH_HOSTS: "http://elasticsearch:9200"
+      TELEMETRY_ENABLED: "false"
+      XPACK_REPORTING_ENABLED: "false"
+    depends_on:
+      - elasticsearch
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 120s
+    networks:
+      japp-network:
+        ipv4_address: 10.89.2.32
+
+# ════════════════════════════════════════════════════════════════
+# Networks
+# ════════════════════════════════════════════════════════════════
 networks:
+  # ELK Analyser 自有網路（web ↔ elk-analyser）
   elk-analyser-network:
     name: elk-analyser-network
+    driver: bridge
     ipam:
       config:
         - subnet: 10.89.1.0/24
 
-# ── Volumes：全部由 podman-compose 自動建立與管理 ────────────────────
+  # japp-demo 共享網路（container-japp/banking-db/ES/Logstash/Kibana/elk-analyser 互通）
+  japp-network:
+    name: japp-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.89.2.0/24
+
+# ════════════════════════════════════════════════════════════════
+# Volumes
+# ════════════════════════════════════════════════════════════════
 volumes:
+  # ELK Analyser 持久化
   bob_workspace:
     name: bob_workspace
   elk_reports:
     name: elk_reports
   elk_db:
     name: elk_db
+
+  # japp-demo 持久化
+  app_logs:           # 共享日誌：container-japp 寫入，logstash 讀取
+    driver: local
+  db_data:
+    driver: local
+  es_data:
+    driver: local
+
+  # Instana agent 持久化設定
+  instana-agent-config:
+    driver: local

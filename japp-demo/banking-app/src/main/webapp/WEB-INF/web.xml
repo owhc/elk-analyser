@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Updated: 2026-09-15 19:56:07 +0800 -->
+<!--
+  Minimal web.xml — Servlet 5.0 (Jakarta EE 10)
+  Spring Boot's SpringBootServletInitializer registers the DispatcherServlet
+  programmatically via the Servlet 3.1+ SPI, so this descriptor only needs
+  to declare the correct schema and set metadata-complete="false" to allow
+  annotation scanning.
+-->
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                             https://jakarta.ee/xml/ns/jakartaee/web-app_5_0.xsd"
+         version="5.0"
+         metadata-complete="false">
+
+  <display-name>Banking Demo Application</display-name>
+  <description>Spring Boot 3 WAR on WAS Liberty — Banking Demo with MQ + PostgreSQL</description>
+
+  <!-- Default character encoding for all requests -->
+  <request-character-encoding>UTF-8</request-character-encoding>
+  <response-character-encoding>UTF-8</response-character-encoding>
+
+  <!-- Session timeout: 30 minutes -->
+  <session-config>
+    <session-timeout>30</session-timeout>
+  </session-config>
+
+</web-app>

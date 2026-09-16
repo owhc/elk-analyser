@@ -1,4 +1,4 @@
-# Updated: 2026-08-27 18:08:17 +0800
+# Updated: 2026-09-16 08:41:56 +0800
 """
 api.py
 ──────
@@ -13,7 +13,7 @@ REST API 入口（FastAPI）。
   DELETE /jobs           批次刪除多筆任務（body: {"ids": [1,2,3]}）
   GET  /jobs/{id}/report 下載 PPTX 報告檔
   GET  /jobs/{id}/status 輪詢任務執行狀態（供非同步模式使用）
-  POST /demo/inject      注入 WAS/MQ/DB2 Demo 模擬資料
+  POST /demo/inject      注入 WAS/MQ/PostgreSQL Demo 模擬資料
   GET  /health           健康檢查
 """
 
@@ -82,10 +82,13 @@ class AnalyseRequest(BaseModel):
     from_time: Optional[str] = None        # 格式：YYYY-MM-DDTHH:MM:SS+00:00 或 YYYY-MM-DD HH:MM
     to_time: Optional[str] = None
     lookback_minutes: Optional[int] = None # Kibana Alert 評估視窗長度（分鐘），需與 rule 設定一致
-    trigger: Optional[str] = None          # 觸發來源，如 "kibana_alert"
+    trigger: Optional[str] = None          # 觸發來源，如 "kibana_alert" / "kibana_alert_instana" / "webui_instana"
     # 可選覆蓋設定（未來擴充）
     index_pattern: Optional[str] = None
     levels: Optional[list[str]] = None
+    # ── 開發 / 測試用隱藏欄位（不在 Web UI 呈現，不列入正式使用文件）──
+    instana_context: Optional[dict] = None        # 單元測試注入假資料
+    instana_context_path: Optional[str] = None    # 重播特定 Instana JSON 檔案
 
 
 class AnalyseResponse(BaseModel):
@@ -98,10 +101,25 @@ class AnalyseResponse(BaseModel):
 
 
 class DemoInjectRequest(BaseModel):
-    """Demo 資料注入請求體。"""
-    from_time: str = "2025-01-15 08:00"
-    to_time:   str = "2025-01-15 09:00"
-    trigger_analyse: bool = True         # 注入後是否立即觸發分析
+    """Demo 資料注入請求體。
+
+    from_time / to_time 預設動態計算為「當前時間往前 1 小時」，
+    確保 Demo 展示時報告時間戳記與現實時間一致。
+    傳入明確時間字串（格式 'YYYY-MM-DD HH:MM'）可覆蓋預設值。
+    """
+    from_time: Optional[str] = None   # None = 動態計算 now - 1h
+    to_time:   Optional[str] = None   # None = 動態計算 now
+    trigger_analyse: bool = True       # 注入後是否立即觸發分析
+
+    def resolved_window(self) -> tuple[str, str]:
+        """回傳最終使用的時間窗口（字串格式 YYYY-MM-DD HH:MM）。"""
+        _fmt = "%Y-%m-%d %H:%M"
+        if self.to_time and self.from_time:
+            return self.from_time, self.to_time
+        now = datetime.now(timezone.utc)
+        to   = self.to_time   or now.strftime(_fmt)
+        frm  = self.from_time or (now - timedelta(hours=1)).strftime(_fmt)
+        return frm, to
 
 
 # ── 工具函式 ──────────────────────────────────────────────────────────
@@ -183,8 +201,50 @@ def _resolve_query_window(req: "AnalyseRequest") -> tuple[datetime, datetime]:
 def _resolve_trigger_mode(trigger: Optional[str], async_mode: bool = False) -> str:
     """將 request.trigger 對應到 trigger_mode 字串。"""
     if trigger:
-        return trigger  # 直接使用（如 "kibana_alert"）
+        return trigger  # 直接使用（如 "kibana_alert" / "kibana_alert_instana"）
     return "on_demand_async" if async_mode else "on_demand"
+
+
+def _resolve_instana_context(
+    req: "AnalyseRequest",
+    query_from: "datetime",
+    query_to: "datetime",
+) -> "Optional[dict]":
+    """
+    依四段優先序決定 instana_context：
+      1. trigger in (kibana_alert_instana, webui_instana) → 呼叫 instana_collector.collect()
+      2. req.instana_context inline dict → dev/test 隱藏欄位
+      3. req.instana_context_path 磁碟路徑 → dev/test 隱藏欄位
+      4. 無 → 純 ELK 降級（回傳 None）
+    """
+    _instana_triggers = {"kibana_alert_instana", "webui_instana"}
+
+    if req.trigger in _instana_triggers:
+        try:
+            import instana_collector
+            ctx = instana_collector.collect(query_from, query_to)
+            logger.info("Instana 收集完成（trigger=%s）available=%s", req.trigger, ctx.get("available"))
+            return ctx
+        except Exception as exc:
+            logger.warning("Instana collect 失敗，降級為純 ELK：%s", exc)
+            return {"available": False, "error": str(exc)}
+
+    if req.instana_context:
+        logger.debug("使用 inline instana_context（dev/test）")
+        return req.instana_context
+
+    if req.instana_context_path:
+        try:
+            import json as _json
+            with open(req.instana_context_path, "r", encoding="utf-8") as f:
+                ctx = _json.load(f)
+            logger.debug("從磁碟載入 instana_context：%s", req.instana_context_path)
+            return ctx
+        except Exception as exc:
+            logger.warning("載入 instana_context_path 失敗：%s", exc)
+            return {"available": False, "error": str(exc)}
+
+    return None
 
 
 def _run_analysis_bg(req: "AnalyseRequest", row_id: Optional[int] = None) -> None:
@@ -200,11 +260,12 @@ def _run_analysis_bg(req: "AnalyseRequest", row_id: Optional[int] = None) -> Non
         logger.error("背景分析時間解析失敗：%s", exc.detail)
         return
     trigger_mode = _resolve_trigger_mode(req.trigger, async_mode=True)
+    instana_ctx = _resolve_instana_context(req, qf, qt)
     if not _analysis_lock.acquire(blocking=False):
         logger.warning("分析任務已在執行中，跳過本次背景觸發（trigger=%s）", trigger_mode)
         return
     try:
-        run_analysis(qf, qt, trigger_mode, row_id=row_id)
+        run_analysis(qf, qt, trigger_mode, instana_context=instana_ctx, row_id=row_id)
     finally:
         _analysis_lock.release()
 
@@ -229,10 +290,18 @@ def analyse(req: AnalyseRequest, background_tasks: BackgroundTasks):
     from analysis_pipeline import run_analysis
 
     # F-06：軟性去重 — 同視窗 5 分鐘內已完成，直接回傳既有結果
+    # Instana trigger 帶有額外資料來源，即使視窗相同也必須重跑，跳過去重
+    _instana_triggers = {"kibana_alert_instana", "webui_instana"}
     qf, qt = _resolve_query_window(req)
-    recent = _repo().find_recent_completed(qf, qt, within_minutes=5)
+    recent = None if req.trigger in _instana_triggers else _repo().find_recent_completed(qf, qt, within_minutes=5)
     if recent:
         logger.info("同視窗任務在 5 分鐘內已完成（job_id=%s），跳過重複分析", recent["id"])
+        import json as _json
+        try:
+            recent_summary = _json.loads(recent.get("summary_json") or "{}")
+        except Exception:
+            recent_summary = {}
+        recent_summary["_deduplicated"] = True
         return AnalyseResponse(
             job_id=str(recent["id"]),
             status="completed",
@@ -240,7 +309,7 @@ def analyse(req: AnalyseRequest, background_tasks: BackgroundTasks):
             report_download_url=(
                 f"/api/jobs/{recent['id']}/report" if recent.get("report_path") else None
             ),
-            summary={},
+            summary=recent_summary,
             error=None,
         )
 
@@ -251,7 +320,8 @@ def analyse(req: AnalyseRequest, background_tasks: BackgroundTasks):
         )
     try:
         trigger_mode = _resolve_trigger_mode(req.trigger)
-        result = run_analysis(qf, qt, trigger_mode)
+        instana_ctx = _resolve_instana_context(req, qf, qt)
+        result = run_analysis(qf, qt, trigger_mode, instana_context=instana_ctx)
     finally:
         _analysis_lock.release()
 
@@ -290,7 +360,13 @@ def analyse_async(req: AnalyseRequest, background_tasks: BackgroundTasks):
 def list_jobs(limit: int = 10):
     """列出最近 N 筆分析任務歷史。"""
     try:
-        return _repo().list_jobs(limit)
+        jobs = _repo().list_jobs(limit)
+        for job in jobs:
+            try:
+                job["summary"] = json.loads(job.pop("summary_json") or "{}")
+            except (TypeError, json.JSONDecodeError):
+                job["summary"] = {}
+        return jobs
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"資料庫查詢失敗：{exc}")
 
@@ -418,17 +494,22 @@ def job_status(job_id: int):
 @app.post("/demo/inject")
 def demo_inject(req: DemoInjectRequest, background_tasks: BackgroundTasks):
     """
-    注入 WAS/MQ/DB2 Demo 模擬資料。
+    注入 WAS/MQ/PostgreSQL Demo 模擬資料。
     兩段式執行（F-10）：
       1. 同步：呼叫 gen_fake_data.py --no-trigger 純寫入資料（快速，不阻塞 worker）
       2. 若 trigger_analyse=True，以 BackgroundTasks 非同步觸發分析，立即回傳
+
+    from_time / to_time 未傳入時動態計算為 now-1h / now，確保 Demo 時間戳記正確。
     """
+    # 解析最終時間窗口（動態或明確傳入）
+    from_str, to_str = req.resolved_window()
+
     # ── Step 1：純資料注入（--no-trigger，只寫檔案，秒級完成）──────────
     try:
         inject_cmd = [
             "python", "/app/gen_fake_data.py",
-            "--from", req.from_time,
-            "--to",   req.to_time,
+            "--from", from_str,
+            "--to",   to_str,
             "--no-trigger",
         ]
         result = subprocess.run(inject_cmd, capture_output=True, text=True, timeout=30)
@@ -446,12 +527,12 @@ def demo_inject(req: DemoInjectRequest, background_tasks: BackgroundTasks):
 
     # ── Step 2：若需要，非同步觸發分析（不阻塞當前請求）──────────────
     if req.trigger_analyse:
-        analyse_req = AnalyseRequest(from_time=req.from_time, to_time=req.to_time)
+        analyse_req = AnalyseRequest(from_time=from_str, to_time=to_str)
         background_tasks.add_task(_run_analysis_bg, analyse_req)
 
     return {
         "status": "ok",
-        "message": f"已注入 WAS/MQ/DB2 Demo 資料（{req.from_time} → {req.to_time}）",
+        "message": f"已注入 WAS/MQ/PostgreSQL Demo 資料（{from_str} → {to_str}）",
         "triggered": req.trigger_analyse,
         "note": "分析已在背景執行，請透過 GET /jobs 查詢結果" if req.trigger_analyse else "僅注入資料，未觸發分析",
         "log": result.stdout[-1000:],

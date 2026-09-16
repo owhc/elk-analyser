@@ -1,4 +1,4 @@
-# Updated: 2026-08-27 17:20:49 +0800
+# Updated: 2026-09-15 19:58:12 +0800
 """
 analyser/preprocessor.py
 ─────────────────────────
@@ -113,25 +113,51 @@ def _clean_event(ev: dict) -> dict:
     return {k: v for k, v in ev.items() if k not in ("_ts", "_idx")}
 
 
+def _build_instana_context(raw: Optional[dict]) -> dict:
+    """
+    正規化並驗證 instana_context 結構。
+    raw 為 None 時回傳 { available: false }。
+    raw 已含 available=false 時直接回傳。
+    """
+    if not raw:
+        return {"available": False}
+    if not raw.get("available", True):
+        # 明確標記失敗（如 collect 失敗）
+        return {"available": False, "error": raw.get("error", "unknown")}
+    return {
+        "available": True,
+        "collected_at": raw.get("collected_at", ""),
+        "application_id": raw.get("application_id", ""),
+        "query_window": raw.get("query_window", {}),
+        "events": raw.get("events", []),
+        "endpoint_metrics": raw.get("endpoint_metrics", []),
+        "trace_summary": raw.get("trace_summary", []),
+        "infra_metrics": raw.get("infra_metrics", {}),
+    }
+
+
 def preprocess(
     raw_logs: list[dict],
     job_id: str,
     query_from: datetime,
     query_to: datetime,
     config=None,
+    instana_context: Optional[dict] = None,
 ) -> dict:
     """
     主要預處理函式。
 
     參數：
-        raw_logs    extractor.extract() 回傳的原始日誌列表
-        job_id      分析任務 ID（用於產出 JSON 的標識）
-        query_from  查詢視窗開始時間
-        query_to    查詢視窗結束時間
-        config      AppConfig 實例（或含 field_mapping 的 dict，向後相容）
+        raw_logs         extractor.extract() 回傳的原始日誌列表
+        job_id           分析任務 ID（用於產出 JSON 的標識）
+        query_from       查詢視窗開始時間
+        query_to         查詢視窗結束時間
+        config           AppConfig 實例（或含 field_mapping 的 dict，向後相容）
+        instana_context  由 api.py 解析後傳入的 Instana 資料 dict；
+                         None 表示純 ELK 模式（向後相容）
 
     回傳：
-        符合 Bob Shell 輸入契約的事件序列字典
+        符合 Bob Shell 輸入契約的事件序列字典（含頂層 instana_context）
     """
     if config is None:
         from config_loader import AppConfig
@@ -188,6 +214,7 @@ def preprocess(
         "total_raw_count": len(raw_logs),
         "total_filtered_count": len(events),
         "event_chains": event_chains,
+        "instana_context": _build_instana_context(instana_context),
     }
 
     logger.info(

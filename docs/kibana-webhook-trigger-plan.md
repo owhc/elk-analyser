@@ -1,5 +1,6 @@
 # Kibana Webhook Trigger — 整合計畫
 <!-- Updated: 2026-08-26 23:41:32 +0800 -->
+<!-- status: IMPLEMENTED — POST /analyse Kibana Alert webhook 已完整實作，支援 trigger=kibana_alert/kibana_alert_instana -->
 
 ## 目標與範圍
 

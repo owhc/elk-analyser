@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Updated: 2026-09-15 19:56:07 +0800 -->
+<!--
+  WAS Liberty server.xml — Banking Demo
+  ======================================
+  Features：全 Jakarta EE 9（servlet-5.0 時代）
+    - servlet-5.0  : Spring Boot WAR 部署
+    - jdbc-4.2     : PostgreSQL DataSource
+    - cdi-3.0      : CDI 依賴注入
+    - jsonp-2.0    : JSON Processing
+    - jsonb-2.0    : JSON Binding
+
+  JMS/MDB：由 Spring JMS（spring-boot-starter-artemis）在應用程式層直接連接 Artemis
+    - 不使用 Liberty JCA（connectors-2.0 / messaging-3.0 / mdb-4.0 / jmsMdb-3.2）
+    - 完全避免 Java EE 7 vs Jakarta EE 9 版本衝突（CWWKF0044E）
+
+  環境變數讀取：${env.VAR_NAME}
+  bootstrap.properties 讀取：${property.key}
+-->
+<server description="Banking Demo Server">
+
+  <!-- =========================================================== -->
+  <!-- Feature Manager（最小 Jakarta EE 9 subset，無 JMS/EJB）     -->
+  <!-- =========================================================== -->
+  <featureManager>
+    <feature>servlet-5.0</feature>
+    <feature>jdbc-4.2</feature>
+    <feature>jndi-1.0</feature>
+    <feature>cdi-3.0</feature>
+    <feature>jsonp-2.0</feature>
+    <feature>jsonb-2.0</feature>
+    <!-- Instana MBeans 監控：提供 JVM heap/thread/HTTP session 指標 -->
+    <feature>monitor-1.0</feature>
+  </featureManager>
+
+  <!-- =========================================================== -->
+  <!-- HTTP 端點                                                    -->
+  <!-- =========================================================== -->
+  <httpEndpoint id="defaultHttpEndpoint"
+                host="*"
+                httpPort="9080"
+                httpsPort="9443"/>
+
+  <!-- =========================================================== -->
+  <!-- PostgreSQL JDBC Driver                                       -->
+  <!-- postgresql.jar 由 Containerfile 下載至 shared resources     -->
+  <!-- =========================================================== -->
+  <library id="pgJdbcLib">
+    <fileset dir="/opt/ibm/wlp/usr/shared/resources/postgres"
+             includes="postgresql.jar"/>
+  </library>
+
+  <jdbcDriver id="pgDriver" libraryRef="pgJdbcLib"/>
+
+  <dataSource id="bankingDS"
+              jndiName="jdbc/bankingDS"
+              jdbcDriverRef="pgDriver"
+              statementCacheSize="10"
+              isolationLevel="TRANSACTION_READ_COMMITTED"
+              connectionSharing="1">
+    <properties
+        url="jdbc:postgresql://${db.host}:${db.port}/${db.name}?currentSchema=banking"
+        user="${db.user}"
+        password="${db.pass}"/>
+    <connectionManager
+        minPoolSize="0"
+        maxPoolSize="10"
+        connectionTimeout="30s"
+        maxIdleTime="3m"
+        purgePolicy="EntirePool"
+        agedTimeout="-1"/>
+  </dataSource>
+
+  <!-- =========================================================== -->
+  <!-- 應用程式管理（dropins 自動熱部署）                            -->
+  <!-- =========================================================== -->
+  <applicationManager autoExpand="true"/>
+
+  <!-- =========================================================== -->
+  <!-- 日誌（JSON 格式 → /logs/liberty/，Logstash 收集）            -->
+  <!-- =========================================================== -->
+  <logging
+      messageFormat="json"
+      logDirectory="/logs/liberty"
+      maxFiles="5"
+      maxFileSize="20"
+      consoleLogLevel="INFO"
+      traceSpecification="*=info"
+      traceFormat="BASIC"
+      isoDateFormat="true"/>
+
+  <!-- =========================================================== -->
+  <!-- JVM — Instana Java Trace Agent 注入                         -->
+  <!-- JAR 由 instana-java-agent volume 掛載至 /opt/instana-agent  -->
+  <!-- macOS Podman 無 socket，late-attach 不可用，必須直接注入    -->
+  <!-- =========================================================== -->
+  <jvmEntries
+      verbose="gc"
+      maxHeapSize="256m"
+      initialHeapSize="128m"
+      genericJvmArguments="-javaagent:/opt/instana-agent/instana-agent.jar">
+    <systemProperty name="java.net.preferIPv4Stack" value="true"/>
+  </jvmEntries>
+
+</server>

@@ -1,0 +1,1 @@
+-- DEPRECATED: Replaced by schema-postgres.sql

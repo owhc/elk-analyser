@@ -1,4 +1,4 @@
-# Updated: 2026-08-27 16:13:56 +0800
+# Updated: 2026-09-15 21:57:10 +0800
 """
 analyser/bob_bridge.py
 ──────────────────────
@@ -41,7 +41,15 @@ _ANALYSIS_PROMPT = (
     "針對每個 event chain，輸出：chain_id、severity（CRITICAL/HIGH/MEDIUM）、"
     "title（中文一句話摘要）、timeline（時序事件列表）、root_cause（中文技術根因）、"
     "short_term_fix（短期應急處理）、long_term_fix（長期架構改善）。"
-    "同時輸出整體 summary（total_errors、critical_count、warning_count、affected_modules）。"
+    "同時輸出整體 summary，包含 total_errors、critical_count、warning_count、affected_modules，"
+    "以及 incident_status（status、severity、title、description）與 impact_analysis"
+    "（affected_services、customer_impact、business_impact、operational_impact）。"
+    "若事件序列頂層包含 instana_context 且 available=true，"
+    "請將其與 event_chains 交叉比對以強化根因判斷："
+    "（1）events：將 Instana Issues/Incidents 與對應時間的日誌錯誤關聯，說明是否同步發生；"
+    "（2）endpoint_metrics：使用 error_rate 與 latency P95 驗證或強化根因，在 root_cause 中引用具體數值；"
+    "（3）trace_summary：補充因果鏈的跨服務傳播路徑（如 Liberty → bankdb）。"
+    "若 instana_context.available=false 或不存在，忽略 Instana 分析，僅使用 event_chains。"
     "僅回傳符合契約的 JSON，不要包含任何說明文字。"
 )
 
@@ -79,18 +87,24 @@ def _run_bob(
         or ""
     )
 
-    prompt = f"@{file_path}"
-    if extra_prompt:
-        prompt = f"{prompt} {extra_prompt}"
-
     cmd = [
         "bob", "run",
         "--accept-license",
+        "--workspace", "/",
+        "--disable-tool-groups", "read",
         "--mode", mode,
         "--format", "json",
         "--max-turns", "5",
-        prompt,
+        f"@{file_path}",
     ]
+    event_sequence = file_path.read_text(encoding="utf-8")
+    prompt = (
+        "不得呼叫工具或讀取其他檔案。以下 JSON 是唯一要分析的事件序列：\n"
+        f"{event_sequence}"
+    )
+    if extra_prompt:
+        prompt = f"{prompt}\n\n{extra_prompt}"
+    cmd.append(prompt)
 
     # 白名單 env：只傳必要的環境變數，不洩漏父程序所有 env
     _safe_keys = {"HOME", "PATH", "USER", "TMPDIR", "LANG", "TERM"}
@@ -105,6 +119,7 @@ def _run_bob(
         text=True,
         timeout=timeout + 10,
         env=env,
+        cwd="/",
     )
 
 
@@ -137,15 +152,36 @@ def _parse_bob_output(stdout: str) -> dict:
 
     # last_message 本身應為 JSON 字串
     try:
-        # 去除 markdown code fence（Bob 有時會包裹）
+        # 嘗試 1：去除 markdown code fence 後直接 parse
         clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", last_message.strip())
         analysis = json.loads(clean)
         logger.info("Bob Shell 分析解析成功，共 %d 個 event_chains",
                     len(analysis.get("event_chains", [])))
         return analysis
     except json.JSONDecodeError:
-        logger.error("last_message 不是有效 JSON：%s", last_message[:500])
-        return {"error": "last_message JSON 解析失敗", "raw": last_message}
+        pass
+
+    # 嘗試 2：last_message 內含前置說明文字，從中抽取 JSON block（```json ... ``` 或第一個 {...}）
+    try:
+        # 先找 fenced code block
+        fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", last_message, re.DOTALL)
+        if fence_match:
+            analysis = json.loads(fence_match.group(1))
+            logger.info("Bob Shell 分析從 fenced block 解析成功，共 %d 個 event_chains",
+                        len(analysis.get("event_chains", [])))
+            return analysis
+        # 再找裸 JSON object（取最後一個最大的）
+        json_matches = re.findall(r"\{.*\}", last_message, re.DOTALL)
+        if json_matches:
+            analysis = json.loads(json_matches[-1])
+            logger.info("Bob Shell 分析從裸 JSON 解析成功，共 %d 個 event_chains",
+                        len(analysis.get("event_chains", [])))
+            return analysis
+    except json.JSONDecodeError:
+        pass
+
+    logger.error("last_message 不是有效 JSON：%s", last_message[:500])
+    return {"error": "last_message JSON 解析失敗", "raw": last_message}
 
 
 def analyse(
@@ -206,6 +242,10 @@ def analyse(
 
     # Step 3：解析輸出
     analysis = _parse_bob_output(result.stdout)
+
+    # 保留 instana_context（從 event_sequence 透傳至 report_builder）
+    if "instana_context" in event_sequence and "instana_context" not in analysis:
+        analysis["instana_context"] = event_sequence["instana_context"]
 
     # 清理暫存檔
     try:

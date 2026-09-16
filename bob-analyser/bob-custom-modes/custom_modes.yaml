@@ -1,4 +1,4 @@
-# Updated: 2026-08-27 18:08:17 +0800
+# Updated: 2026-09-15 22:05:30 +0800
 # Bob Shell Custom Modes 定義
 # 部署路徑（bob 2.x）：/root/.bob/settings/custom_modes.yaml
 # Dockerfile 於 build 時執行：COPY bob-custom-modes/custom_modes.yaml /root/.bob/settings/custom_modes.yaml
@@ -36,8 +36,7 @@ customModes:
         - 僅回傳符合指定 JSON 契約的純 JSON，不包含任何說明文字或 markdown
         - 所有輸出欄位（title、root_cause、建議）均使用繁體中文
         - 若事件資料不足以確定根因，在 root_cause 中說明「資料不足，推測為...」
-    groups:
-      - read
+    groups: []
     customInstructions: |
       接收到事件序列 JSON 後，依以下契約輸出分析結果（純 JSON，無任何前後文字）：
 
@@ -46,7 +45,19 @@ customModes:
           "total_errors": <整數>,
           "critical_count": <整數>,
           "warning_count": <整數>,
-          "affected_modules": ["<服務名稱>", ...]
+          "affected_modules": ["<服務名稱>", ...],
+          "incident_status": {
+            "status": "OPEN|MONITORING|RESOLVED",
+            "severity": "CRITICAL|HIGH|MEDIUM",
+            "title": "<事故標題，不超過 30 字>",
+            "description": "<目前事故狀況摘要，不超過 180 字>"
+          },
+          "impact_analysis": {
+            "affected_services": ["<受影響服務>", ...],
+            "customer_impact": "<客戶或使用者受到的影響，不超過 120 字>",
+            "business_impact": "<交易、營收、SLA 或資料完整性影響，不超過 120 字>",
+            "operational_impact": "<維運、資源、佇列或下游系統影響，不超過 120 字>"
+          }
         },
         "event_chains": [
           {
@@ -67,10 +78,27 @@ customModes:
       }
 
       嚴格遵守：
-        1. 僅輸出 JSON，第一個字元必須是 {，最後一個字元必須是 }
-        2. 所有中文欄位使用繁體中文
-        3. severity 只能是 CRITICAL、HIGH、MEDIUM 三者之一
-        4. 若 event_chains 為空（無有效資料），仍輸出完整 JSON 結構，event_chains 為空陣列
+        1. 僅分析使用者以 @file 附加的事件序列，不得讀取或引用其他專案檔案
+        2. 僅輸出 JSON，第一個字元必須是 {，最後一個字元必須是 }
+        3. 所有中文欄位使用繁體中文
+        4. severity 只能是 CRITICAL、HIGH、MEDIUM 三者之一
+        5. incident_status 與 impact_analysis 必須根據輸入事件與 Instana 指標產生；資料不足時明確標示推測，不得捏造數值
+        6. 若 event_chains 為空（無有效資料），仍輸出完整 JSON 結構，event_chains 為空陣列
+
+      instana_context 使用說明（當頂層 instana_context.available=true 時）：
+        - instana_context.events[]: 同時間窗口的 Instana Issues/Incidents
+            欄位：event_id, type(issue|incident), severity(5=warning/10=critical),
+                  problem, entity_label, start, end, state
+            → 在 root_cause 中說明與日誌錯誤的時序關聯（如「同時段 Instana 偵測到 Liberty 服務 incident」）
+        - instana_context.endpoint_metrics[]: HTTP endpoint 層級指標
+            欄位：endpoint, calls, errors, error_rate_pct, latency_p95_ms
+            → 在 root_cause 中引用具體數值（如「POST /api/login error_rate 達 35%，P95 latency 為 2800ms」）
+        - instana_context.trace_summary[]: 跨服務 trace 錯誤分布
+            欄位：service, error_traces, total_traces, error_rate_pct
+            → 補充因果鏈的跨服務傳播路徑（如「bankdb 服務 trace error rate 67% 印證 DB 層問題」）
+        - instana_context.infra_metrics.jvm: heap_used_mb, gc_pause_ms, thread_count
+        - instana_context.infra_metrics.artemis: message_count, messages_expired
+        - 若 instana_context.available=false，忽略整個區塊，僅根據 event_chains 分析
 
   - slug: report-builder
     name: "📑 Report Builder"

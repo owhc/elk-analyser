@@ -1,4 +1,4 @@
-# Updated: 2026-08-27 16:13:56 +0800
+# Updated: 2026-09-15 19:58:12 +0800
 """
 cli.py
 ──────
@@ -45,9 +45,11 @@ def cli():
               help="查詢開始時間，格式：'YYYY-MM-DD HH:MM'")
 @click.option("--to", "to_time", required=True,
               help="查詢結束時間，格式：'YYYY-MM-DD HH:MM'")
+@click.option("--with-instana", "with_instana", is_flag=True, default=False,
+              help="同時收集 Instana APM 歷史資料（需 config.yaml instana.enabled=true）")
 @click.option("--config", default=_DEFAULT_CONFIG, show_default=True,
               help="設定檔路徑")
-def run(from_time, to_time, config):
+def run(from_time, to_time, with_instana, config):
     """執行一次分析任務（需指定 --from 與 --to）。"""
     from analysis_pipeline import run_analysis
 
@@ -58,8 +60,25 @@ def run(from_time, to_time, config):
     except ValueError:
         click.echo("錯誤：時間格式應為 'YYYY-MM-DD HH:MM'", err=True)
         sys.exit(1)
+
+    instana_ctx = None
+    if with_instana:
+        click.echo("⚡  收集 Instana APM 資料...")
+        try:
+            import instana_collector
+            instana_ctx = instana_collector.collect(qf, qt, config)
+            avail = instana_ctx.get("available", False)
+            if avail:
+                click.echo(f"   ✅ Instana 收集成功（events={len(instana_ctx.get('events', []))}）")
+            else:
+                click.echo(f"   ⚠  Instana 收集失敗（{instana_ctx.get('error', '')}），降級為純 ELK", err=True)
+        except Exception as exc:
+            click.echo(f"   ⚠  Instana collector 錯誤：{exc}，降級為純 ELK", err=True)
+            instana_ctx = {"available": False, "error": str(exc)}
+
     click.echo(f"▶  主動查詢：{from_time} → {to_time}")
-    result = run_analysis(qf, qt, "on_demand", config)
+    trigger = "cli_instana" if with_instana else "on_demand"
+    result = run_analysis(qf, qt, trigger, config, instana_context=instana_ctx)
 
     if result["status"] == "completed":
         click.echo(f"✅  分析完成")
