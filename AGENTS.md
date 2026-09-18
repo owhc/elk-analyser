@@ -1,11 +1,12 @@
 # AGENTS.md
-<!-- Updated: 2026-09-15 22:45:24 +0800 -->
+<!-- Updated: 2026-09-16 21:24:28 +0800 -->
 
 ## Session Memory
 @.bob/memory/session.md
 
 ## Stack & Architecture
-- **Core**: Python 3 (FastAPI + Click CLI + SQLite); proxy `web:3001` -> `elk-analyser:8080`
+- **Core**: Python 3 (FastAPI + Click CLI + SQLite); Gateway `web:3001` (Nginx: `/grafana/`, `/web/`, `/api/`)
+- **Grafana**: `grafana:10.4.0` (Unified Dashboard + Alerting Webhook -> `POST /analyse`)
 - **Banking Demo**: WAS Liberty -> Artemis(`bankingQueue`) -> MDB -> PostgreSQL 16 (JDBC via `jdbcExecutor.submit()`) -> Logstash -> ES
 - **Pipeline**: [`extractor`](bob-analyser/analyser/extractor.py) -> [`preprocessor`](bob-analyser/analyser/preprocessor.py) -> [`bob_bridge`](bob-analyser/analyser/bob_bridge.py) -> [`report_builder`](bob-analyser/analyser/report_builder.py) orchestrated by [`run_analysis()`](bob-analyser/analysis_pipeline.py)
 - **Instana**: Trigger (`*_instana` / `--with-instana`) -> [`instana_collector`](bob-analyser/instana_collector.py) -> injects `instana_context` into `event_sequence` & PPTX Slide 3.5; pure ELK fallback on failure
@@ -22,9 +23,13 @@
 
 ## Quick Reference
 ```bash
-# Start Stack / pg_monitor
+# Start Stack (含 Grafana + Provisioning)
 bash scripts/setup-instana.sh && podman-compose -f podman-compose.yml -f podman-compose.override.yml up -d
 podman exec -it banking-db psql -U db2inst1 -d bankdb -c "GRANT pg_monitor TO db2inst1;"
+# Access Unified Port 3001
+# - Grafana Dashboard: http://localhost:3001/grafana/ (首頁自動導向)
+# - Standby Web UI:    http://localhost:3001/web/
+# - API Health:        http://localhost:3001/api/health
 # Trigger Analysis (CLI / Webhook / Demo Inject)
 podman exec elk-analyser python cli.py run --from "2026-01-15 08:00" --to "2026-01-15 12:00" --with-instana
 curl -sX POST http://localhost:8080/analyse -H 'Content-Type: application/json' -d '{"from_time":"2026-01-15 08:00","to_time":"2026-01-15 12:00","trigger":"webui_instana"}'
@@ -33,5 +38,5 @@ curl -sX POST http://localhost:8080/demo/inject -H 'Content-Type: application/js
 curl http://localhost:8080/jobs && curl -O http://localhost:8080/jobs/1/report && bash scripts/generate-observability-incident.sh 1
 ```
 - **Endpoints**: `POST /analyse` (409 busy, 208 deduplicated 5m), `POST /analyse/async`, `GET|DELETE /jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/status`, `GET /jobs/{id}/report`, `POST /demo/inject`
-- **Network**: `elk-analyser-web` (:3001), `elk-analyser` (10.89.1.10 & 10.89.2.50 :8080), `instana-agent` (10.89.2.5 :42699), `banking-app` (10.89.2.20 :9080/5672/8161), `banking-db` (10.89.2.10 :5432), `elasticsearch` (10.89.2.30 :9200), `logstash` (:31), `kibana` (:5601)
+- **Network**: `elk-analyser-web` (:3001), `grafana` (10.89.1.20 & 10.89.2.60 :3000), `elk-analyser` (10.89.1.10 & 10.89.2.50 :8080), `instana-agent` (10.89.2.5 :42699), `banking-app` (10.89.2.20 :9080/5672/8161), `banking-db` (10.89.2.10 :5432), `elasticsearch` (10.89.2.30 :9200), `logstash` (:31), `kibana` (:5601)
 - **Key Modules**: [`analysis_pipeline.py`](bob-analyser/analysis_pipeline.py), [`api.py`](bob-analyser/api.py), [`cli.py`](bob-analyser/cli.py), [`config_loader.py`](bob-analyser/config_loader.py), [`instana_collector.py`](bob-analyser/instana_collector.py), [`job_repository.py`](bob-analyser/db/job_repository.py), [`report_builder.py`](bob-analyser/analyser/report_builder.py), [`config.yaml`](bob-analyser/config/config.yaml), [`custom_modes.yaml`](bob-analyser/bob-custom-modes/custom_modes.yaml)

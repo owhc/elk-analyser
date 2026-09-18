@@ -1,0 +1,47 @@
+# Created: 2026-09-16 21:24:28 +0800
+# Grafana Datasources Provisioning Configuration
+apiVersion: 1
+
+datasources:
+  # 1. Elasticsearch Data Source (Banking Logs)
+  - name: Elasticsearch
+    type: elasticsearch
+    access: proxy
+    url: http://elasticsearch:9200
+    isDefault: true
+    jsonData:
+      database: "banking-logs-*"
+      timeField: "@timestamp"
+      version: "8.0.0"
+      logLevelField: "log.level"
+      logMessageField: "message"
+      maxConcurrentShardRequests: 5
+    editable: true
+
+  # 2. PostgreSQL Data Source (Banking Database)
+  - name: Banking-PostgreSQL
+    type: postgres
+    access: proxy
+    url: banking-db:5432
+    user: db2inst1
+    secureJsonData:
+      password: "db2admin123"
+    jsonData:
+      database: "bankdb"
+      sslmode: "disable"
+      maxOpenConns: 5
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+    editable: true
+
+  # 3. Infinity Data Source (ELK Analyser REST API)
+  # 用於在儀表板中呈現 /api/jobs、任務狀態與 PPTX 下載
+  - name: ELK-Analyser-API
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    url: http://elk-analyser:8080
+    jsonData:
+      auth_method: "none"
+      allowed_hosts:
+        - "http://elk-analyser:8080"
+    editable: true

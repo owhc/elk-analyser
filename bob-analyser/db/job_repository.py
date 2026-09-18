@@ -1,4 +1,4 @@
-# Updated: 2026-09-16 08:38:10 +0800
+# Updated: 2026-09-17 12:03:11 +0800
 """
 db/job_repository.py
 ─────────────────────
@@ -145,6 +145,19 @@ class JobRepository:
         finally:
             conn.close()
 
+    def get_running_job(self) -> Optional[dict]:
+        """回傳目前 status='running' 的最新一筆任務，沒有則回傳 None。
+        供 409 回應提供可輪詢的 job_id。"""
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                "SELECT id, trigger_mode, started_at FROM analysis_jobs "
+                "WHERE status='running' ORDER BY id DESC LIMIT 1",
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
     def find_recent_completed(
         self,
         query_from: datetime,
@@ -152,12 +165,22 @@ class JobRepository:
         within_minutes: int = 5,
     ) -> Optional[dict]:
         """
-        查詢是否已有相同視窗（±1s 容差）且 within_minutes 分鐘內完成的任務。
+        查詢是否已有重疊視窗且 within_minutes 分鐘內完成的任務。
         用於 POST /analyse 的軟性去重防護（F-06）。
-        回傳最新一筆 completed job，找不到回傳 None。
+
+        「不帶時間」的主動觸發每次都會產生略不同的 now()，不能做精確字串比對。
+        改用視窗重疊判斷：已完成任務的 (query_from, query_to) 與本次請求的視窗
+        有重疊（overlap），且兩端差距均在 overlap_tolerance_seconds 秒內，即視為
+        同一視窗。這樣同一個「近 1 小時」請求在 5 分鐘內不會重複分析。
+
+        回傳最新一筆符合條件的 completed job，找不到回傳 None。
         """
         from datetime import timedelta
         cutoff = (datetime.now(timezone.utc) - timedelta(minutes=within_minutes)).isoformat()
+        # 容許兩端各偏移 within_minutes 分鐘（動態視窗每次 now() 都略不同）
+        tolerance_sec = within_minutes * 60
+        qf_iso = query_from.isoformat()
+        qt_iso = query_to.isoformat()
         conn = self._conn()
         try:
             row = conn.execute(
@@ -165,10 +188,17 @@ class JobRepository:
                    FROM analysis_jobs
                    WHERE status = 'completed'
                      AND completed_at >= ?
-                     AND query_from = ?
-                     AND query_to   = ?
+                     AND query_from <= ?
+                     AND query_to   >= ?
+                     AND CAST((julianday(?) - julianday(query_from)) * 86400 AS INTEGER) <= ?
+                     AND CAST((julianday(query_to) - julianday(?)) * 86400 AS INTEGER) <= ?
                    ORDER BY id DESC LIMIT 1""",
-                (cutoff, query_from.isoformat(), query_to.isoformat()),
+                (
+                    cutoff,
+                    qt_iso, qf_iso,        # 視窗重疊：existing.from <= new.to AND existing.to >= new.from
+                    qf_iso, tolerance_sec, # |existing.from - new.from| <= tolerance
+                    qt_iso, tolerance_sec, # |existing.to   - new.to  | <= tolerance
+                ),
             ).fetchone()
             return dict(row) if row else None
         finally:

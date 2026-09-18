@@ -1,48 +1,33 @@
 # Session Memory — elk-analyser
-<!-- Updated: 2026-09-15 22:30:10 +0800 -->
+<!-- Updated: 2026-09-17 14:46:00 +0800 -->
 
 ## Project
-ELK Analyser：從 Elasticsearch 日誌提取 → Bob log-analyst 根因分析 → PPTX 報告，加掛 Instana APM 整合。
+ELK Analyser 是一個結合 ELK Stack、Instana APM 與 Bob AI 的自動化日誌分析與根因診斷系統，輸出主管級 PPTX 報告。
 
 ## Session goal
-實作 Instana APM 整合（docs/instana-integration-plan.md，全部 5 個 sub-tasks）。
+修復 REPORT 68/69 — ELK + Instana 無法分析 PostgreSQL check constraint 違反（chk_balance_non_negative）的問題。
 
 ## Key decisions
-- `instana_collector.py` 為純 function 模組，不依賴 AppConfig（改用 `_load_config()` 直讀 yaml），與既有模式一致
-- `_resolve_instana_context()` 在 `api.py` 中以閉包呼叫 `instana_collector.collect()`，直接使用 ELK_CONFIG 或預設路徑
-- `instana_context` 透過 `preprocessor → event_sequence → bob_bridge → analysis` 透傳至 `report_builder`
-- `bob_bridge.analyse()` 在 `_parse_bob_output` 後補回 `instana_context`（AI 不輸出它）
-- Slide 3.5 僅 `available=true` 時插入，`available=false` 報告結構不變（降級守則）
-- CLI `--with-instana` flag 使用 `trigger=cli_instana`
+- **log-analyst groups 必須含 read**：`groups: []` 讓 Bob 沒有任何工具，無法讀取 `@file` attachment，改為 `groups: [read]`。
+- **_ANALYSIS_PROMPT 不能作為 cmd 引數**：1.46MB 的 prompt 超過 OS ARG_MAX（2MB），改為 `_ANALYSIS_PROMPT` 放在 custom_modes.yaml customInstructions 裡（已存在），`_run_bob` 只傳短 prompt。
+- **extractor 排除 Liberty 假 ERROR**：Logstash 把 SystemErr→ERROR/SystemOut→INFO，但 liberty_message 的 SystemErr message 裡大量是正常業務 INFO log（3430/3685 筆），需用 must_not 排除不含錯誤關鍵字的 SystemErr 噪音。
+- **Instana endpoint_metrics 改為 service.name 分組**（原 endpoint.name），使 bankdb/postgresql DB call errors 可見。
 
 ## Files changed this session
 | File | Change |
 |------|--------|
-| `bob-analyser/instana_collector.py` | **新建** — Instana REST API 封裝 |
-| `bob-analyser/config/config.yaml` | 新增 `instana:` 設定區塊 |
-| `bob-analyser/config_loader.py` | 新增 `instana_config` / `instana_enabled` 屬性 |
-| `bob-analyser/api.py` | `AnalyseRequest` + `_resolve_instana_context()` + trigger 整合 |
-| `bob-analyser/analysis_pipeline.py` | `run_analysis()` 新增 `instana_context` 參數 |
-| `bob-analyser/analyser/preprocessor.py` | `_build_instana_context()` + `preprocess()` 注入 |
-| `bob-analyser/analyser/bob_bridge.py` | `_ANALYSIS_PROMPT` 更新 + `instana_context` 透傳 |
-| `bob-analyser/bob-custom-modes/custom_modes.yaml` | `log-analyst` customInstructions 補充 instana_context 說明 |
-| `bob-analyser/analyser/report_builder.py` | `_add_instana_slide()` + Slide 3.5 插入 |
-| `bob-analyser/cli.py` | `--with-instana` flag |
-| `bob-analyser/.env.example` | 新增 `INSTANA_API_TOKEN` |
-| `AGENTS.md` | Instana 整合路徑說明 + 新指令 + Key Files |
+| `japp-demo/container-b/logstash/pipeline.conf` | PostgreSQL grok 後補 `add_field message = postgres_detail` |
+| `bob-analyser/instana_collector.py` | `collect_endpoint_metrics` 改為 `service.name` 分組 |
+| `bob-analyser/analyser/bob_bridge.py` | 移除 `--disable-tool-groups read`；`_ANALYSIS_PROMPT` 不再作為 cmd 引數傳入（改由 customInstructions 承擔） |
+| `bob-analyser/analyser/extractor.py` | 新增 `must_not` 排除 was-liberty SystemOut 全部 + SystemErr 無錯誤關鍵字的噪音 |
+| `bob-analyser/bob-custom-modes/custom_modes.yaml` | `log-analyst groups: [] → [read]`；補充業務規則違反模式；customInstructions 具體數值改為佔位符 |
 
 ## Rules & constraints discovered
-- `bob_bridge` 的 AI 輸出不含 `instana_context`，需在 `analyse()` 末段手動透傳
-- `_add_instana_slide` 的 local helper fn 需在函式內定義（不能跨 `_build_report` 共用）
-- `instana_collector.collect()` 任一子項目失敗只 warning，仍回傳部分資料（available=true）
-
-## Completed since last session
-- `config.yaml instana.enabled` 已改為 `true`（正式啟用）
-- Web UI「ELK + Instana 合併分析」按鈕已實作（`web/index.html` `triggerAnalyseWithInstana()`）
-- API 新增端點：`DELETE /jobs/{id}`、`DELETE /jobs`、`GET /jobs/{id}/status`、`POST /demo/inject`
-- `AppConfig` 取代所有模組 `_load_config()` helper；`JobRepository` 集中所有 SQLite 操作
-- `scripts/generate-observability-incident.sh` 端對端驗證腳本已建立
+- `log-analyst groups: []` 會禁止所有 tool，`@file` 附件無法被 Bob 讀取 → 必須 `groups: [read]`。
+- bob_bridge `_ANALYSIS_PROMPT` 作為 cmd 引數 → ARG_MAX 錯誤 → 改放 customInstructions。
+- Liberty `liberty_message` index 的 `log.level=ERROR` 有 3685 筆是假 ERROR（SystemErr/SystemOut），佔查詢結果 94%，會讓 Bob 看到雜訊而無法識別真實錯誤。
+- custom_modes.yaml 修改需重建 elk-analyser image (`podman-compose build elk-analyser`)。
 
 ## Open threads / next steps
-- Sub-task 5 端對端驗證需容器啟動後手動執行（`bash scripts/generate-observability-incident.sh`）
-- AGENTS.md 已同步更新反映目前實際狀態
+- 驗證 PPTX 報告中 Instana DB service error_rate 是否正確出現在 Slide 3.5。
+- 確認長時間運行下 Logstash PostgreSQL pipeline 的 message 欄位補全是否穩定。

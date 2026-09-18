@@ -1,4 +1,4 @@
-# Updated: 2026-09-15 21:57:10 +0800
+# Updated: 2026-09-17 14:31:14 +0800
 """
 analyser/bob_bridge.py
 ──────────────────────
@@ -44,12 +44,20 @@ _ANALYSIS_PROMPT = (
     "同時輸出整體 summary，包含 total_errors、critical_count、warning_count、affected_modules，"
     "以及 incident_status（status、severity、title、description）與 impact_analysis"
     "（affected_services、customer_impact、business_impact、operational_impact）。"
+    "重要識別模式：當 event_chains 中出現 'check constraint' 或 'chk_balance_non_negative' 等 DB 錯誤，"
+    "此為業務規則違反（Business Rule Violation），根因在應用層——交易邏輯未預先驗證餘額即直接寫入 DB；"
+    "應識別為 CRITICAL，short_term_fix 應包含應用層餘額前置驗證，long_term_fix 應包含樂觀鎖或交易補償機制。"
     "若事件序列頂層包含 instana_context 且 available=true，"
     "請將其與 event_chains 交叉比對以強化根因判斷："
     "（1）events：將 Instana Issues/Incidents 與對應時間的日誌錯誤關聯，說明是否同步發生；"
-    "（2）endpoint_metrics：使用 error_rate 與 latency P95 驗證或強化根因，在 root_cause 中引用具體數值；"
+    "（2）endpoint_metrics：此為 service 層級指標（service.name 分組，涵蓋 bankdb/postgresql），"
+    "    使用 error_rate 與 latency P95 驗證或強化根因，endpoint 欄位值即 service 名稱，"
+    "    在 root_cause 中引用具體數值（如 'bankdb service error_rate 達 68%'）；"
     "（3）trace_summary：補充因果鏈的跨服務傳播路徑（如 Liberty → bankdb）。"
     "若 instana_context.available=false 或不存在，忽略 Instana 分析，僅使用 event_chains。"
+    "【重要】輸出的 event_chains 必須與輸入的 event_chains 嚴格 1-to-1 對應："
+    "輸入有幾個 chain_id，輸出就必須有幾個對應的 event_chain 物件，chain_id 值完全一致；"
+    "禁止合併多個 chain_id、禁止拆分單一 chain_id、禁止修改或重新命名 chain_id。"
     "僅回傳符合契約的 JSON，不要包含任何說明文字。"
 )
 
@@ -87,24 +95,23 @@ def _run_bob(
         or ""
     )
 
+    # 事件序列透過 @file_path 附件傳給 bob（bob 用 read_file tool 讀取）。
+    # 不重複嵌入 JSON 到 prompt，避免超過 OS ARG_MAX（通常 2MB）。
+    # 不加 --disable-tool-groups read，保留 read tool 讓 bob 能讀取 @file 附件。
+    prompt = "請分析 @file 附件中的事件序列 JSON。"
+    if extra_prompt:
+        prompt = f"{prompt}\n\n{extra_prompt}"
+
     cmd = [
         "bob", "run",
         "--accept-license",
         "--workspace", "/",
-        "--disable-tool-groups", "read",
         "--mode", mode,
         "--format", "json",
         "--max-turns", "5",
+        prompt,
         f"@{file_path}",
     ]
-    event_sequence = file_path.read_text(encoding="utf-8")
-    prompt = (
-        "不得呼叫工具或讀取其他檔案。以下 JSON 是唯一要分析的事件序列：\n"
-        f"{event_sequence}"
-    )
-    if extra_prompt:
-        prompt = f"{prompt}\n\n{extra_prompt}"
-    cmd.append(prompt)
 
     # 白名單 env：只傳必要的環境變數，不洩漏父程序所有 env
     _safe_keys = {"HOME", "PATH", "USER", "TMPDIR", "LANG", "TERM"}
@@ -221,8 +228,10 @@ def analyse(
     file_path = _write_event_sequence(event_sequence, workspace, logs_subdir, job_id)
 
     # Step 2：直接執行 bob run（無 SSH）
+    # _ANALYSIS_PROMPT 已包含在 log-analyst custom_modes.yaml customInstructions 中，
+    # 不需再作為 cmd 引數重複傳入（避免 ARG_MAX 超限）。
     try:
-        result = _run_bob(file_path, mode, timeout, _ANALYSIS_PROMPT)
+        result = _run_bob(file_path, mode, timeout)
     except subprocess.TimeoutExpired:
         logger.error("Bob CLI 分析逾時，任務 ID：%s", job_id)
         return {"error": f"Bob CLI 分析逾時（{timeout}s）"}

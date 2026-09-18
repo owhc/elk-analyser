@@ -1,0 +1,13 @@
+# Created: 2026-09-16 21:24:28 +0800
+apiVersion: 1
+
+providers:
+  - name: 'ELK Analyser Dashboards'
+    orgId: 1
+    folder: 'Observability & AI'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

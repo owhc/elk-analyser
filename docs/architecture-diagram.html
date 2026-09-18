@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Updated: 2026-09-15 22:17:05 +0800 -->
+<!-- Updated: 2026-09-16 23:41:54 +0800 -->
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -8,34 +8,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: #f5f5f5;
-    font-family: 'Geist', sans-serif;
-    padding: 48px 40px 64px;
-    min-height: 100vh;
-  }
-  .page-header { max-width: 1800px; margin: 0 auto 32px; }
-  .eyebrow {
-    font-family: 'Geist Mono', monospace;
-    font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase;
-    color: #4f5d75; margin-bottom: 8px;
-  }
-  h1 {
-    font-family: 'Instrument Serif', serif;
-    font-size: 1.75rem; font-weight: 400; color: #2d3142;
-    line-height: 1.25; margin-bottom: 8px;
-  }
+  body { background: #f5f5f5; font-family: 'Geist', sans-serif; padding: 48px 40px 64px; min-height: 100vh; }
+  .page-header { max-width: 1300px; margin: 0 auto 32px; }
+  .eyebrow { font-family: 'Geist Mono', monospace; font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: #4f5d75; margin-bottom: 8px; }
+  h1 { font-family: 'Instrument Serif', serif; font-size: 1.75rem; font-weight: 400; color: #2d3142; line-height: 1.25; margin-bottom: 8px; }
   .subtitle { font-size: 13px; color: #4f5d75; }
-  .diagram-wrap { max-width: 1800px; margin: 0 auto; overflow-x: auto; }
+  .diagram-wrap { max-width: 1300px; margin: 0 auto; overflow-x: auto; }
   svg { display: block; }
-  .cards {
-    max-width: 1800px; margin: 32px auto 0;
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
-  }
-  .card {
-    background: #fff; border: 1px solid rgba(45,49,66,0.12);
-    border-radius: 6px; padding: 1.25rem;
-  }
+  .cards { max-width: 1300px; margin: 32px auto 0; display: grid; grid-template-columns: 1.1fr 1fr 1fr 0.95fr 0.95fr; gap: 16px; }
+  .card { background: #fff; border: 1px solid rgba(45,49,66,0.12); border-radius: 6px; padding: 1.25rem; }
   .card .eyebrow { margin-bottom: 6px; }
   .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .card-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
@@ -44,608 +25,473 @@
   .card-dot.green  { background: #2e8a5f; }
   .card-dot.purple { background: #7c5cd8; }
   .card-dot.blue   { background: #2e5aa8; }
+  .card-dot.orange { background: #e8820c; }
   .card h3 { font-size: 13px; font-weight: 600; color: #2d3142; }
   .card ul { list-style: none; padding: 0; }
   .card ul li { font-size: 12px; color: #4f5d75; padding: 2px 0; }
   .card ul li::before { content: '— '; color: rgba(45,49,66,0.30); }
   .card ul li code { font-family: 'Geist Mono', monospace; font-size: 10px; color: #2d3142; }
-  footer {
-    max-width: 1800px; margin: 40px auto 0; padding-top: 16px;
-    border-top: 1px solid rgba(45,49,66,0.10);
-    font-family: 'Geist Mono', monospace; font-size: 8px;
-    letter-spacing: 0.12em; color: #7a8399;
-  }
+  footer { max-width: 1300px; margin: 40px auto 0; padding-top: 16px; border-top: 1px solid rgba(45,49,66,0.10); font-family: 'Geist Mono', monospace; font-size: 8px; letter-spacing: 0.12em; color: #7a8399; }
 </style>
 </head>
 <body>
-
 <header class="page-header">
   <p class="eyebrow">SYSTEM ARCHITECTURE</p>
   <h1>ELK Analyser — Full System</h1>
-  <p class="subtitle">Podman Compose · WAS Liberty · Artemis MQ · PostgreSQL · ELK Stack · FastAPI · Bob CLI · Instana</p>
+  <p class="subtitle">Podman Compose · WAS Liberty · Artemis MQ · PostgreSQL · ELK Stack · Grafana 11.2 · FastAPI · Bob CLI · Instana</p>
 </header>
-
 <div class="diagram-wrap">
 <!--
-  ╔══════════════════════════════════════════════════════════════════════════╗
-  ║  COLUMN GRID  (all units: SVG px)                                       ║
-  ║                                                                          ║
-  ║  Col 1  Liberty+Artemis   x=60   w=220  cx=170                          ║
-  ║  GAP-AB                   x=280  w=60   (routing lane)                  ║
-  ║  Col 2  PostgreSQL        x=340  w=200  cx=440                          ║
-  ║  GAP-BC                   x=540  w=60   (routing lane)                  ║
-  ║  Col 3  app_logs vol      x=600  w=180  cx=690                          ║
-  ║  GAP-CD                   x=780  w=60   (routing lane)                  ║
-  ║  Col 4  Logstash + ES     x=840  w=220  cx=950                          ║
-  ║  GAP-DE                   x=1060 w=60   (routing lane)                  ║
-  ║  Col 5  elk-analyser      x=1120 w=240  cx=1240                         ║
-  ║  GAP-EF                   x=1360 w=60   (routing lane)                  ║
-  ║  Col 6  Bob CLI / outputs x=1420 w=220  cx=1530                         ║
-  ║                                                                          ║
-  ║  ROW GRID                                                                ║
-  ║  Row 0  Kibana trigger / Instana / Nginx  y=60  h=100                   ║
-  ║  ROW-GAP-01               y=160 h=20                                    ║
-  ║  Row 1  Liberty+Artemis / FastAPI / Bob   y=180 h=240                   ║
-  ║  ROW-GAP-12               y=420 h=30                                    ║
-  ║  Row 2  PostgreSQL / Logstash / ES / SQLite y=450 h=180                 ║
-  ║  ROW-GAP-23               y=630 h=20                                    ║
-  ║  Row 3  app_logs / Kibana                 y=650 h=80                    ║
-  ╚══════════════════════════════════════════════════════════════════════════╝
+  NEW 5-COLUMN COMPACT LAYOUT
+  ════════════════════════════════════════════════════════════
+  Col 1  Banking App       x=48   w=200  cx=148  r=248
+  GAP-12                   x=248  w=32
+  Col 2  ELK+PG+Logstash   x=280  w=200  cx=380  r=480
+  GAP-23                   x=480  w=32
+  Col 3  FastAPI            x=512  w=212  cx=618  r=724
+  GAP-34                   x=724  w=32
+  Col 4  Grafana            x=756  w=204  cx=858  r=960
+  GAP-45                   x=960  w=32
+  Col 5  Nginx/Bob/PPTX    x=992  w=168  cx=1076 r=1160
+
+  ROW GRID
+  Row 0  Instana(col1-2)+WebUI(col3)+Nginx(col5)  y=48  h=72  b=120
+  ROW-GAP-01                                      y=120 h=20
+  Row 1  Liberty/FastAPI/Grafana/Bob/PPTX          y=140 h=244 b=384
+  ROW-GAP-12                                      y=384 h=20
+  Row 2  PG / Logstash / ES / SQLite               y=404 h=148 b=552
+  ROW-GAP-23                                      y=552 h=20
+  Row 3  app_logs / Kibana                         y=572 h=64  b=636
+  LEGEND                                           y=660
+  viewBox: 0 0 1200 730
 -->
-<svg viewBox="0 0 1700 800" width="1700" height="800"
+<svg viewBox="0 0 1200 730" width="1200" height="730"
      role="img" aria-labelledby="arch-title arch-desc"
      xmlns="http://www.w3.org/2000/svg">
   <title id="arch-title">ELK Analyser Full Architecture</title>
-  <desc id="arch-desc">Layered architecture: Banking Demo feeds logs into ELK stack, analysed by elk-analyser FastAPI + Bob CLI. Instana monitors JVM containers.</desc>
+  <desc id="arch-desc">5-column compact layout: Banking Demo (Liberty+Artemis) → ELK Pipeline (PG, Logstash, ES) → FastAPI (elk-analyser) → Grafana 11.2 → Nginx Gateway / Bob CLI / PPTX. Instana monitors JVM containers.</desc>
 
   <defs>
-    <marker id="a"  markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#4f5d75"/></marker>
-    <marker id="ao" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#eb6c36"/></marker>
-    <marker id="ab" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#2e5aa8"/></marker>
-    <marker id="ag" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#2e8a5f"/></marker>
-    <marker id="ap" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#7c5cd8"/></marker>
-    <!-- label pill background helper: use <rect> with fill=#f5f5f5 before each text -->
+    <marker id="a"   markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#4f5d75"/></marker>
+    <marker id="ao"  markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#eb6c36"/></marker>
+    <marker id="ab"  markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#2e5aa8"/></marker>
+    <marker id="ag"  markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#2e8a5f"/></marker>
+    <marker id="ap"  markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#7c5cd8"/></marker>
+    <marker id="agr" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#e8820c"/></marker>
   </defs>
 
   <rect width="100%" height="100%" fill="#f5f5f5"/>
 
-  <!-- ══════════════════════════════════════════
-       NETWORK ZONE BACKGROUNDS (drawn first)
-  ═════════════════════════════════════════════ -->
+  <!-- ═══════════════════════════════════════════
+       NETWORK ZONES (drawn first)
+  ════════════════════════════════════════════ -->
 
-  <!-- japp-network: cols 1-4 + row 0-3, x=44 y=44 w=1056 h=700 -->
-  <rect x="44" y="44" width="1056" height="706" rx="8"
-        fill="rgba(46,138,95,0.03)" stroke="rgba(46,138,95,0.30)"
-        stroke-dasharray="8,5" stroke-width="1.3"/>
-  <rect x="56" y="36" width="196" height="16" rx="2" fill="#f5f5f5"/>
-  <text x="154" y="48" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" letter-spacing="0.13em"
-        fill="rgba(46,138,95,0.80)">JAPP-NETWORK · 10.89.2.0/24</text>
+  <!-- japp-network: col 1-2, x=36 y=36 w=456 h=614 -->
+  <rect x="36" y="36" width="456" height="614" rx="8"
+        fill="rgba(46,138,95,0.03)" stroke="rgba(46,138,95,0.28)" stroke-dasharray="8,5" stroke-width="1.2"/>
+  <rect x="48" y="28" width="184" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="140" y="40" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" letter-spacing="0.13em" fill="rgba(46,138,95,0.80)">JAPP-NETWORK · 10.89.2.0/24</text>
 
-  <!-- elk-analyser-network: col 5-6, x=1100 y=44 w=590 h=700 -->
-  <rect x="1100" y="44" width="580" height="706" rx="8"
-        fill="rgba(235,108,54,0.03)" stroke="rgba(235,108,54,0.30)"
-        stroke-dasharray="8,5" stroke-width="1.3"/>
-  <rect x="1260" y="36" width="228" height="16" rx="2" fill="#f5f5f5"/>
-  <text x="1374" y="48" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" letter-spacing="0.13em"
-        fill="rgba(235,108,54,0.80)">ELK-ANALYSER-NETWORK · 10.89.1.0/24</text>
+  <!-- elk-analyser-network: col 3-5, x=500 y=36 w=672 h=614 -->
+  <rect x="500" y="36" width="672" height="614" rx="8"
+        fill="rgba(235,108,54,0.03)" stroke="rgba(235,108,54,0.28)" stroke-dasharray="8,5" stroke-width="1.2"/>
+  <rect x="640" y="28" width="224" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="752" y="40" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" letter-spacing="0.13em" fill="rgba(235,108,54,0.80)">ELK-ANALYSER-NETWORK · 10.89.1.0/24</text>
 
-  <!-- elk-analyser container (inner dashed): x=1110 y=170 w=560 h=310 -->
-  <rect x="1110" y="170" width="560" height="310" rx="6"
-        fill="rgba(235,108,54,0.05)" stroke="rgba(235,108,54,0.45)"
-        stroke-dasharray="4,3" stroke-width="1"/>
-  <rect x="1122" y="162" width="160" height="15" rx="2" fill="#f5f5f5"/>
-  <text x="1202" y="173" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" letter-spacing="0.10em"
-        fill="rgba(235,108,54,0.85)">ELK-ANALYSER CONTAINER</text>
+  <!-- FastAPI container (inner dashed) x=508 y=132 w=208 h=244 -->
+  <rect x="508" y="132" width="208" height="244" rx="6"
+        fill="rgba(235,108,54,0.04)" stroke="rgba(235,108,54,0.40)" stroke-dasharray="4,3" stroke-width="1"/>
+  <rect x="520" y="124" width="148" height="14" rx="2" fill="#f5f5f5"/>
+  <text x="594" y="135" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" letter-spacing="0.10em" fill="rgba(235,108,54,0.80)">ELK-ANALYSER CONTAINER</text>
 
-  <!-- ══════════════════════════════════════════
-       ROW 0: Trigger / Instana / Nginx
-       y=60, h=100
-  ═════════════════════════════════════════════ -->
+  <!-- ═══════════════════════════════════════════
+       ROW 0: Instana Agent / Standby Web UI / Nginx Gateway
+       y=48, h=72
+  ════════════════════════════════════════════ -->
 
-  <!-- Kibana Alert trigger box (x=60,y=60,w=220,h=80) -->
-  <rect x="60" y="60" width="220" height="80" rx="5"
-        fill="rgba(79,93,117,0.08)" stroke="rgba(79,93,117,0.35)" stroke-width="1"/>
-  <rect x="68" y="68" width="60" height="12" rx="2"
-        fill="transparent" stroke="rgba(79,93,117,0.35)" stroke-width="0.8"/>
-  <text x="98" y="77" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(79,93,117,0.75)">TRIGGER</text>
-  <text x="170" y="106" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="12" font-weight="600" fill="#2d3142">Kibana Alert</text>
-  <text x="170" y="122" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">webhook POST / CLI</text>
+  <!-- Instana Agent: spans col1+col2, x=48 y=48 w=424 h=68 -->
+  <rect x="48" y="48" width="424" height="68" rx="5"
+        fill="rgba(124,92,216,0.07)" stroke="rgba(124,92,216,0.42)" stroke-width="1.2"/>
+  <rect x="56" y="56" width="104" height="12" rx="2" fill="transparent" stroke="rgba(124,92,216,0.38)" stroke-width="0.8"/>
+  <text x="108" y="65" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(124,92,216,0.85)">INSTANA-AGENT · 10.89.2.5</text>
+  <text x="260" y="90" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11.5" font-weight="600" fill="#2d3142">Instana Agent  :42699</text>
+  <text x="260" y="106" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">JAVA_TOOL_OPTIONS · zone: japp-demo-local · tags: team=banking,env=staging</text>
 
-  <!-- Instana Agent (x=340,y=60,w=420,h=80) — wide, centred in cols 2-3 -->
-  <rect x="340" y="60" width="420" height="80" rx="5"
-        fill="rgba(124,92,216,0.07)" stroke="rgba(124,92,216,0.45)" stroke-width="1.2"/>
-  <rect x="348" y="68" width="104" height="12" rx="2"
-        fill="transparent" stroke="rgba(124,92,216,0.40)" stroke-width="0.8"/>
-  <text x="400" y="77" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(124,92,216,0.85)">INSTANA-AGENT · 10.89.2.5</text>
-  <text x="550" y="106" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="12" font-weight="600" fill="#2d3142">Instana Agent  :42699</text>
-  <text x="550" y="122" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">JAVA_TOOL_OPTIONS · zone: japp-demo-local · tags: team=banking,env=staging</text>
+  <!-- Standby Web UI: col3, x=512 y=48 w=204 h=68 -->
+  <rect x="512" y="48" width="204" height="68" rx="5"
+        fill="rgba(45,49,66,0.04)" stroke="rgba(45,49,66,0.20)" stroke-width="1"/>
+  <rect x="520" y="56" width="52" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.20)" stroke-width="0.8"/>
+  <text x="546" y="65" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(45,49,66,0.48)">WEB UI</text>
+  <text x="614" y="88" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11.5" font-weight="600" fill="#2d3142">Standby Web UI</text>
+  <text x="614" y="104" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">static · /web/ (fallback)</text>
 
-  <!-- Nginx Dashboard (x=1430,y=60,w=220,h=80) -->
-  <rect x="1430" y="60" width="220" height="80" rx="5"
-        fill="rgba(45,49,66,0.04)" stroke="rgba(45,49,66,0.25)" stroke-width="1"/>
-  <rect x="1438" y="68" width="36" height="12" rx="2"
-        fill="transparent" stroke="rgba(45,49,66,0.25)" stroke-width="0.8"/>
-  <text x="1456" y="77" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(45,49,66,0.55)">WEB UI</text>
-  <text x="1540" y="106" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="12" font-weight="600" fill="#2d3142">Nginx Dashboard</text>
-  <text x="1540" y="122" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">elk-analyser-web · :3001</text>
-
-  <!-- ══════════════════════════════════════════
-       ROW 1: Banking App / FastAPI / Bob CLI / PPTX
-       y=180, h=240
-  ═════════════════════════════════════════════ -->
-
-  <!-- WAS Liberty + Artemis MQ (x=60,y=180,w=220,h=240) -->
-  <rect x="60" y="180" width="220" height="240" rx="5"
-        fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
-  <rect x="68" y="188" width="100" height="12" rx="2"
-        fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
-  <text x="118" y="197" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(45,49,66,0.65)">BANKING-APP · 10.89.2.20</text>
-  <text x="170" y="228" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="13" font-weight="600" fill="#2d3142">WAS Liberty</text>
-  <text x="170" y="246" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">:9080 · Spring Boot WAR</text>
-  <text x="170" y="262" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">jdbcExecutor pattern</text>
-  <text x="170" y="278" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">PGSimpleDataSource</text>
-  <line x1="68" y1="294" x2="272" y2="294" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
-  <text x="170" y="316" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="12" font-weight="500" fill="#2d3142">Artemis MQ</text>
-  <text x="170" y="334" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">:5672 AMQP</text>
-  <text x="170" y="350" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">bankingQueue</text>
-  <text x="170" y="370" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" fill="#7c5cd8">BankingMDB daemon consumer</text>
-  <text x="170" y="408" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="rgba(45,49,66,0.45)">deploy/ hot-reload</text>
-
-  <!-- FastAPI elk-analyser (x=1120,y=180,w=240,h=240) -->
-  <rect x="1120" y="180" width="240" height="240" rx="5"
-        fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.3"/>
-  <rect x="1128" y="188" width="88" height="12" rx="2"
-        fill="transparent" stroke="rgba(235,108,54,0.45)" stroke-width="0.8"/>
-  <text x="1172" y="197" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(235,108,54,0.90)">ELK-ANALYSER · :8080</text>
-  <text x="1240" y="228" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="13" font-weight="600" fill="#2d3142">FastAPI Backend</text>
-  <text x="1240" y="246" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">Analysis Pipeline</text>
-  <text x="1240" y="260" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" fill="#4f5d75">instana_collector.py</text>
-  <text x="1240" y="274" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" fill="#4f5d75">extractor.py</text>
-  <text x="1240" y="288" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" fill="#4f5d75">preprocessor.py</text>
-  <text x="1240" y="302" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" fill="#4f5d75">bob_bridge.py</text>
-  <text x="1240" y="316" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" fill="#4f5d75">report_builder.py</text>
-  <line x1="1128" y1="324" x2="1352" y2="324" stroke="rgba(235,108,54,0.18)" stroke-width="0.8"/>
-  <text x="1240" y="342" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" fill="#4f5d75">10.89.1.10 / 10.89.2.50</text>
-  <text x="1240" y="358" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" fill="#4f5d75">dual-homed · 2 networks</text>
-  <text x="1240" y="374" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" fill="#4f5d75">/analyse · /jobs · /health</text>
-  <text x="1240" y="404" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="rgba(235,108,54,0.75)">SQLite checkpoint</text>
-
-  <!-- Bob CLI (x=1430,y=180,w=220,h=180) -->
-  <rect x="1430" y="180" width="220" height="180" rx="5"
-        fill="rgba(45,49,66,0.04)" stroke="rgba(45,49,66,0.28)" stroke-width="1"/>
-  <rect x="1438" y="188" width="60" height="12" rx="2"
-        fill="transparent" stroke="rgba(45,49,66,0.28)" stroke-width="0.8"/>
-  <text x="1468" y="197" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(45,49,66,0.55)">AI BRIDGE</text>
-  <text x="1540" y="228" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="13" font-weight="600" fill="#2d3142">Bob CLI</text>
-  <text x="1540" y="246" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">--mode log-analyst</text>
-  <text x="1540" y="262" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">--format json</text>
-  <text x="1540" y="278" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">--max-turns 5</text>
-  <text x="1540" y="294" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">@job-{id}.json</text>
-  <text x="1540" y="340" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#2e5aa8">bob_workspace volume</text>
-
-  <!-- PPTX Report (x=1430,y=390,w=220,h=80) — below Bob CLI, same col -->
-  <rect x="1430" y="390" width="220" height="80" rx="5"
-        fill="rgba(45,49,66,0.04)" stroke="rgba(45,49,66,0.25)" stroke-width="1"/>
-  <rect x="1438" y="398" width="56" height="12" rx="2"
-        fill="transparent" stroke="rgba(45,49,66,0.25)" stroke-width="0.8"/>
-  <text x="1466" y="407" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(45,49,66,0.55)">OUTPUT</text>
-  <text x="1540" y="436" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="12" font-weight="600" fill="#2d3142">PPTX Report</text>
-  <text x="1540" y="452" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">/reports/ · elk_reports vol</text>
-
-  <!-- ══════════════════════════════════════════
-       ROW 2: PostgreSQL / Logstash / ES / SQLite
-       y=450, h=180
-  ═════════════════════════════════════════════ -->
-
-  <!-- PostgreSQL 16 (x=340,y=450,w=200,h=160) -->
-  <rect x="340" y="450" width="200" height="160" rx="5"
-        fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
-  <rect x="348" y="458" width="112" height="12" rx="2"
-        fill="transparent" stroke="rgba(79,93,117,0.35)" stroke-width="0.8"/>
-  <text x="404" y="467" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(79,93,117,0.80)">BANKING-DB · 10.89.2.10</text>
-  <text x="440" y="502" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="13" font-weight="600" fill="#2d3142">PostgreSQL 16</text>
-  <text x="440" y="520" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">:50000 → :5432</text>
-  <text x="440" y="536" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">bankdb</text>
-  <text x="440" y="552" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">accounts · transactions</text>
-  <text x="440" y="568" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#7c5cd8">schema-postgres.sql</text>
-  <text x="440" y="596" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="rgba(45,49,66,0.40)">db_data volume</text>
-
-  <!-- Logstash 8.x (x=600,y=450,w=220,h=160) -->
-  <rect x="600" y="450" width="220" height="160" rx="5"
-        fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
-  <rect x="608" y="458" width="108" height="12" rx="2"
-        fill="transparent" stroke="rgba(79,93,117,0.35)" stroke-width="0.8"/>
-  <text x="662" y="467" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(79,93,117,0.80)">LOGSTASH · 10.89.2.31</text>
-  <text x="710" y="502" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="13" font-weight="600" fill="#2d3142">Logstash 8.x</text>
-  <text x="710" y="520" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">:5044 · pipeline.conf</text>
-  <text x="710" y="536" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">banking-logs-* index</text>
-  <text x="710" y="552" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">ecs_compatibility: disabled</text>
-  <text x="710" y="568" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" fill="#4f5d75">ES_JAVA_OPTS: -Xms256m -Xmx256m</text>
-
-  <!-- Elasticsearch 8.x (x=840,y=450,w=220,h=160) -->
-  <rect x="840" y="450" width="220" height="160" rx="5"
-        fill="rgba(46,138,95,0.07)" stroke="rgba(46,138,95,0.55)" stroke-width="1.2"/>
-  <rect x="848" y="458" width="120" height="12" rx="2"
-        fill="transparent" stroke="rgba(46,138,95,0.35)" stroke-width="0.8"/>
-  <text x="908" y="467" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(46,138,95,0.85)">ELASTICSEARCH · 10.89.2.30</text>
-  <text x="950" y="502" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="13" font-weight="600" fill="#2d3142">Elasticsearch 8.13</text>
-  <text x="950" y="520" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">:9200 · single-node</text>
-  <text x="950" y="536" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">index: banking-logs-*</text>
-  <text x="950" y="552" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">xpack.security: false</text>
-  <text x="950" y="568" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8" fill="#4f5d75">ES_JAVA_OPTS: -Xms256m -Xmx512m</text>
-  <text x="950" y="596" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="rgba(46,138,95,0.60)">es_data volume</text>
-
-  <!-- SQLite (x=1120,y=450,w=240,h=120) -->
-  <rect x="1120" y="450" width="240" height="120" rx="5"
-        fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
-  <rect x="1128" y="458" width="36" height="12" rx="2"
-        fill="transparent" stroke="rgba(79,93,117,0.35)" stroke-width="0.8"/>
-  <text x="1146" y="467" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(79,93,117,0.80)">DB</text>
-  <text x="1240" y="502" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="13" font-weight="600" fill="#2d3142">SQLite</text>
-  <text x="1240" y="520" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">/db/history.db · elk_db vol</text>
-  <text x="1240" y="536" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">analysis_jobs · checkpoint</text>
-
-  <!-- ══════════════════════════════════════════
-       ROW 3: app_logs / Kibana
-       y=650, h=80
-  ═════════════════════════════════════════════ -->
-
-  <!-- app_logs volume (x=60,y=650,w=500,h=72) — spans cols 1-2 -->
-  <rect x="60" y="650" width="500" height="72" rx="5"
-        fill="rgba(46,138,95,0.08)" stroke="rgba(46,138,95,0.48)" stroke-width="1"/>
-  <rect x="68" y="658" width="56" height="12" rx="2"
-        fill="transparent" stroke="rgba(46,138,95,0.38)" stroke-width="0.8"/>
-  <text x="96" y="667" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(46,138,95,0.85)">VOLUME</text>
-  <text x="310" y="694" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="13" font-weight="600" fill="#2d3142">app_logs</text>
-  <text x="310" y="710" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">shared named volume · Liberty + PostgreSQL write · Logstash reads</text>
-
-  <!-- Kibana 8.x (x=600,y=650,w=220,h=72) -->
-  <rect x="600" y="650" width="220" height="72" rx="5"
+  <!-- Nginx Gateway: col5, x=992 y=48 w=160 h=68 -->
+  <rect x="992" y="48" width="160" height="68" rx="5"
         fill="rgba(45,49,66,0.04)" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
-  <rect x="608" y="658" width="44" height="12" rx="2"
-        fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
-  <text x="630" y="667" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="6.5" letter-spacing="0.08em"
-        fill="rgba(45,49,66,0.50)">KIBANA</text>
-  <text x="710" y="694" text-anchor="middle"
-        font-family="'Geist', sans-serif" font-size="12" font-weight="600" fill="#2d3142">Kibana 8.x</text>
-  <text x="710" y="710" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="8.5" fill="#4f5d75">:5601 · 10.89.2.32</text>
+  <rect x="1000" y="56" width="36" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+  <text x="1018" y="65" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(45,49,66,0.50)">GATEWAY</text>
+  <text x="1072" y="86" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11.5" font-weight="600" fill="#2d3142">Nginx Gateway</text>
+  <text x="1072" y="100" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">:3001 · /grafana/ /web/ /api/</text>
 
-  <!-- ══════════════════════════════════════════
+  <!-- ═══════════════════════════════════════════
+       ROW 1: Liberty / FastAPI / Grafana / Bob / PPTX
+       y=140, h=244
+  ════════════════════════════════════════════ -->
+
+  <!-- WAS Liberty + Artemis: col1, x=48 y=140 w=200 h=244 -->
+  <rect x="48" y="140" width="200" height="244" rx="5"
+        fill="#ffffff" stroke="#2d3142" stroke-width="1.2"/>
+  <rect x="56" y="148" width="100" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.28)" stroke-width="0.8"/>
+  <text x="106" y="157" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(45,49,66,0.62)">BANKING-APP · 10.89.2.20</text>
+  <text x="148" y="184" text-anchor="middle" font-family="'Geist',sans-serif" font-size="12" font-weight="600" fill="#2d3142">WAS Liberty</text>
+  <text x="148" y="200" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">:9080 · Spring Boot WAR</text>
+  <text x="148" y="214" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">jdbcExecutor pattern</text>
+  <text x="148" y="228" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">PGSimpleDataSource</text>
+  <line x1="56" y1="242" x2="240" y2="242" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+  <text x="148" y="262" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11" font-weight="500" fill="#2d3142">Artemis MQ</text>
+  <text x="148" y="278" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">:5672 AMQP · bankingQueue</text>
+  <text x="148" y="293" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#7c5cd8">BankingMDB daemon consumer</text>
+  <text x="148" y="370" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="rgba(45,49,66,0.40)">deploy/ hot-reload</text>
+
+  <!-- FastAPI: col3, x=512 y=140 w=208 h=244 -->
+  <rect x="512" y="140" width="208" height="244" rx="5"
+        fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.3"/>
+  <rect x="520" y="148" width="88" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.42)" stroke-width="0.8"/>
+  <text x="564" y="157" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(235,108,54,0.88)">ELK-ANALYSER · :8080</text>
+  <text x="616" y="184" text-anchor="middle" font-family="'Geist',sans-serif" font-size="12" font-weight="600" fill="#2d3142">FastAPI Backend</text>
+  <text x="616" y="200" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">Analysis Pipeline</text>
+  <text x="616" y="214" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">instana_collector.py</text>
+  <text x="616" y="227" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">extractor.py · preprocessor.py</text>
+  <text x="616" y="240" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">bob_bridge.py · report_builder.py</text>
+  <line x1="520" y1="252" x2="712" y2="252" stroke="rgba(235,108,54,0.16)" stroke-width="0.8"/>
+  <text x="616" y="268" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">10.89.1.10 / 10.89.2.50</text>
+  <text x="616" y="281" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">dual-homed · /analyse · /jobs</text>
+  <text x="616" y="370" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="rgba(235,108,54,0.70)">SQLite checkpoint</text>
+
+  <!-- Grafana 11.2: col4, x=756 y=140 w=200 h=244 -->
+  <rect x="756" y="140" width="200" height="244" rx="5"
+        fill="rgba(232,130,12,0.08)" stroke="#e8820c" stroke-width="1.3"/>
+  <rect x="764" y="148" width="116" height="12" rx="2" fill="transparent" stroke="rgba(232,130,12,0.42)" stroke-width="0.8"/>
+  <text x="822" y="157" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(232,130,12,0.88)">GRAFANA · 10.89.1.20/2.60</text>
+  <text x="856" y="184" text-anchor="middle" font-family="'Geist',sans-serif" font-size="12" font-weight="600" fill="#2d3142">Grafana 11.2</text>
+  <text x="856" y="200" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">:3000 · dual-homed</text>
+  <text x="856" y="214" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">Datasource: ES :9200</text>
+  <text x="856" y="227" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">Datasource: PG :5432</text>
+  <text x="856" y="240" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">Infinity → /api/jobs</text>
+  <line x1="764" y1="252" x2="948" y2="252" stroke="rgba(232,130,12,0.16)" stroke-width="0.8"/>
+  <text x="856" y="268" text-anchor="middle" font-family="'Geist',sans-serif" font-size="10.5" font-weight="500" fill="#2d3142">Alerting Webhook</text>
+  <text x="856" y="282" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">POST /analyse · Infinity 3.7.1</text>
+  <text x="856" y="296" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">banking-observability-ai.json</text>
+  <text x="856" y="374" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="rgba(232,130,12,0.68)">grafana_data volume</text>
+
+  <!-- Bob CLI: col5, x=992 y=140 w=160 h=152 -->
+  <rect x="992" y="140" width="160" height="152" rx="5"
+        fill="rgba(45,49,66,0.04)" stroke="rgba(45,49,66,0.26)" stroke-width="1"/>
+  <rect x="1000" y="148" width="56" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.26)" stroke-width="0.8"/>
+  <text x="1028" y="157" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(45,49,66,0.52)">AI BRIDGE</text>
+  <text x="1072" y="182" text-anchor="middle" font-family="'Geist',sans-serif" font-size="12" font-weight="600" fill="#2d3142">Bob CLI</text>
+  <text x="1072" y="198" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">--mode log-analyst</text>
+  <text x="1072" y="211" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">--format json --max-turns 5</text>
+  <text x="1072" y="224" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">@job-{id}.json</text>
+  <text x="1072" y="282" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#2e5aa8">bob_workspace vol</text>
+
+  <!-- PPTX Report: col5, x=992 y=304 w=160 h=60 -->
+  <rect x="992" y="304" width="160" height="60" rx="5"
+        fill="rgba(45,49,66,0.04)" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+  <rect x="1000" y="312" width="52" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+  <text x="1026" y="321" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(45,49,66,0.50)">OUTPUT</text>
+  <text x="1072" y="342" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11.5" font-weight="600" fill="#2d3142">PPTX Report</text>
+  <text x="1072" y="356" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">/reports/ · elk_reports vol</text>
+
+  <!-- ═══════════════════════════════════════════
+       ROW 2: PostgreSQL / Logstash / ES / SQLite
+       y=404, h=148
+  ════════════════════════════════════════════ -->
+
+  <!-- PostgreSQL 16: col2, x=280 y=404 w=200 h=148 -->
+  <rect x="280" y="404" width="200" height="148" rx="5"
+        fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+  <rect x="288" y="412" width="112" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.32)" stroke-width="0.8"/>
+  <text x="344" y="421" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(79,93,117,0.78)">BANKING-DB · 10.89.2.10</text>
+  <text x="380" y="448" text-anchor="middle" font-family="'Geist',sans-serif" font-size="12" font-weight="600" fill="#2d3142">PostgreSQL 16</text>
+  <text x="380" y="464" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">:50000 → :5432 · bankdb</text>
+  <text x="380" y="478" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">accounts · transactions</text>
+  <text x="380" y="492" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#7c5cd8">schema-postgres.sql</text>
+  <text x="380" y="542" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="rgba(45,49,66,0.38)">db_data volume</text>
+
+  <!-- Logstash 8.x: col2+, x=280 y=404 is taken → shift col to share space.
+       Logstash actually sits to the RIGHT of PG in same row. Place at x=280 is PG.
+       Logstash at col3 bottom: x=512 y=404 w=208 h=148 -->
+  <rect x="512" y="404" width="208" height="148" rx="5"
+        fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+  <rect x="520" y="412" width="100" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.32)" stroke-width="0.8"/>
+  <text x="570" y="421" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(79,93,117,0.78)">LOGSTASH · 10.89.2.31</text>
+  <text x="616" y="448" text-anchor="middle" font-family="'Geist',sans-serif" font-size="12" font-weight="600" fill="#2d3142">Logstash 8.x</text>
+  <text x="616" y="464" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">:5044 · pipeline.conf</text>
+  <text x="616" y="478" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">banking-logs-* index</text>
+  <text x="616" y="492" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">ecs_compatibility: disabled</text>
+
+  <!-- Elasticsearch 8.13: col4, x=756 y=404 w=200 h=148 -->
+  <rect x="756" y="404" width="200" height="148" rx="5"
+        fill="rgba(46,138,95,0.07)" stroke="rgba(46,138,95,0.52)" stroke-width="1.2"/>
+  <rect x="764" y="412" width="116" height="12" rx="2" fill="transparent" stroke="rgba(46,138,95,0.32)" stroke-width="0.8"/>
+  <text x="822" y="421" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(46,138,95,0.82)">ELASTICSEARCH · 10.89.2.30</text>
+  <text x="856" y="448" text-anchor="middle" font-family="'Geist',sans-serif" font-size="12" font-weight="600" fill="#2d3142">Elasticsearch 8.13</text>
+  <text x="856" y="464" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">:9200 · single-node</text>
+  <text x="856" y="478" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">index: banking-logs-*</text>
+  <text x="856" y="492" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">xpack.security: false</text>
+  <text x="856" y="542" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="rgba(46,138,95,0.58)">es_data volume</text>
+
+  <!-- SQLite: col5, x=992 y=404 w=160 h=100 -->
+  <rect x="992" y="404" width="160" height="100" rx="5"
+        fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+  <rect x="1000" y="412" width="36" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.32)" stroke-width="0.8"/>
+  <text x="1018" y="421" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(79,93,117,0.78)">DB</text>
+  <text x="1072" y="448" text-anchor="middle" font-family="'Geist',sans-serif" font-size="12" font-weight="600" fill="#2d3142">SQLite</text>
+  <text x="1072" y="464" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">/db/history.db · elk_db vol</text>
+  <text x="1072" y="478" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#4f5d75">analysis_jobs · checkpoint</text>
+
+  <!-- ═══════════════════════════════════════════
+       ROW 3: app_logs / Kibana
+       y=572, h=64
+  ════════════════════════════════════════════ -->
+
+  <!-- app_logs: col1+col2, x=48 y=572 w=432 h=60 -->
+  <rect x="48" y="572" width="432" height="60" rx="5"
+        fill="rgba(46,138,95,0.08)" stroke="rgba(46,138,95,0.45)" stroke-width="1"/>
+  <rect x="56" y="580" width="56" height="12" rx="2" fill="transparent" stroke="rgba(46,138,95,0.36)" stroke-width="0.8"/>
+  <text x="84" y="589" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(46,138,95,0.82)">VOLUME</text>
+  <text x="264" y="608" text-anchor="middle" font-family="'Geist',sans-serif" font-size="12" font-weight="600" fill="#2d3142">app_logs</text>
+  <text x="264" y="622" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">shared volume · Liberty + PostgreSQL write · Logstash reads</text>
+
+  <!-- Kibana: col3, x=512 y=572 w=208 h=60 -->
+  <rect x="512" y="572" width="208" height="60" rx="5"
+        fill="rgba(45,49,66,0.04)" stroke="rgba(45,49,66,0.20)" stroke-width="1"/>
+  <rect x="520" y="580" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.20)" stroke-width="0.8"/>
+  <text x="542" y="589" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="6.5" letter-spacing="0.08em" fill="rgba(45,49,66,0.48)">KIBANA</text>
+  <text x="616" y="607" text-anchor="middle" font-family="'Geist',sans-serif" font-size="11.5" font-weight="600" fill="#2d3142">Kibana 8.x</text>
+  <text x="616" y="622" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="8" fill="#4f5d75">:5601 · 10.89.2.32</text>
+
+  <!-- ═══════════════════════════════════════════
        ARROWS
-       All arrows routed through gap lanes.
-       GAP lanes: x=280-340, x=540-600, x=820-840(use 828), x=1060-1120(use 1090), x=1360-1430(use 1390)
-       Row gaps: y=160-180 (use 170), y=420-450 (use 435), y=630-650 (use 640)
-  ═════════════════════════════════════════════ -->
+       Gap lanes (use midpoint):
+         GAP-12 x=248-280 → use x=264
+         GAP-23 x=480-512 → use x=496
+         GAP-34 x=724-756 → use x=740
+         GAP-45 x=960-992 → use x=976
+       Row gaps:
+         ROW-GAP-01 y=120-140 → use y=130
+         ROW-GAP-12 y=384-404 → use y=394
+         ROW-GAP-23 y=552-572 → use y=562
+  ════════════════════════════════════════════ -->
 
-  <!-- ── 1. HTTP Request → Liberty (enters from left)
-       Source: left edge x=44, y=300 (mid of banking-app row 1)
-       Target: left edge of Liberty box x=60, y=300
-       Route: straight left-to-right in gap before zone
-  ── -->
-  <path d="M 20 300 H 58"
+  <!-- A1. HTTP → Liberty (left edge) -->
+  <path d="M 14 262 H 46"
         stroke="#4f5d75" stroke-width="1.3" fill="none" marker-end="url(#a)"/>
-  <rect x="16" y="284" width="42" height="13" rx="2" fill="#f5f5f5"/>
-  <text x="37" y="294" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#7a8399">HTTP</text>
-  <text x="37" y="306" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7" fill="#7a8399">:9080</text>
+  <rect x="4" y="248" width="38" height="26" rx="2" fill="#f5f5f5"/>
+  <text x="23" y="258" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" fill="#7a8399">HTTP</text>
+  <text x="23" y="270" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" fill="#7a8399">:9080</text>
 
-  <!-- ── 2. Liberty → PostgreSQL via MDB JDBC
-       From: right edge of Liberty x=280, y=340 (Artemis section mid)
-       Through: gap lane x=310 (between 280 and 340)
-       Down into PostgreSQL: top of PostgreSQL y=450
-       Route: right to x=310 (gap), down to y=435 (row gap), right to x=440, down to y=450
-  ── -->
-  <path d="M 280 340 H 310 V 435 H 440 V 450"
+  <!-- A2. Liberty → PostgreSQL (MDB JDBC) — Liberty right=248, PG top y=404
+       Route: right to GAP-12 x=264, down to ROW-GAP-12 y=394, right to PG cx=380, down to PG top y=402 -->
+  <path d="M 248 290 H 264 V 394 H 380 V 402"
         stroke="#2e5aa8" stroke-width="1.3" fill="none" marker-end="url(#ab)"/>
-  <!-- label in gap lane, avoid row-1 boxes -->
-  <rect x="284" y="370" width="52" height="27" rx="2" fill="#f5f5f5"/>
-  <text x="310" y="382" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#2e5aa8">MDB</text>
-  <text x="310" y="394" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#2e5aa8">JDBC</text>
+  <rect x="248" y="318" width="44" height="26" rx="2" fill="#f5f5f5"/>
+  <text x="270" y="328" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#2e5aa8">MDB</text>
+  <text x="270" y="340" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#2e5aa8">JDBC</text>
 
-  <!-- ── 3. Liberty + PostgreSQL → app_logs (logs write, dashed)
-       From: bottom of Liberty x=170, y=420 → down to row-gap y=435 → down to app_logs top y=650
-       From: bottom of PostgreSQL x=440, y=610 → down to app_logs top y=650
-  ── -->
-  <!-- Liberty → app_logs -->
-  <path d="M 170 420 V 640 H 168 V 648"
-        stroke="#4f5d75" stroke-width="1" fill="none" stroke-dasharray="5,3"
-        marker-end="url(#a)"/>
-  <rect x="108" y="522" width="36" height="27" rx="2" fill="#f5f5f5"/>
-  <text x="126" y="534" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#7a8399">LOGS</text>
-  <text x="126" y="546" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7" fill="#7a8399">write</text>
+  <!-- A3a. Liberty → app_logs (write, dashed down)
+       Liberty bottom y=384 → down to ROW-GAP-23 y=562 → straight into app_logs top y=570 -->
+  <path d="M 148 384 V 570"
+        stroke="#4f5d75" stroke-width="1" fill="none" stroke-dasharray="5,3" marker-end="url(#a)"/>
+  <rect x="100" y="464" width="36" height="26" rx="2" fill="#f5f5f5"/>
+  <text x="118" y="474" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" fill="#7a8399">LOGS</text>
+  <text x="118" y="484" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" fill="#7a8399">write</text>
 
-  <!-- PostgreSQL → app_logs -->
-  <path d="M 440 610 V 640 H 340 V 648"
-        stroke="#4f5d75" stroke-width="1" fill="none" stroke-dasharray="5,3"
-        marker-end="url(#a)"/>
-  <!-- no extra label, path is short and clear -->
+  <!-- A3b. PostgreSQL → app_logs (write, dashed)
+       PG bottom y=552 → down to app_logs top y=570, same x=380 -->
+  <path d="M 380 552 V 570"
+        stroke="#4f5d75" stroke-width="1" fill="none" stroke-dasharray="5,3" marker-end="url(#a)"/>
 
-  <!-- ── 4. app_logs → Logstash (file read, green)
-       From: right edge of app_logs x=560, y=686
-       To: bottom of Logstash x=710, y=650
-       Route: right from app_logs to gap x=580, up to y=640, right to x=710, down to y=650
-  ── -->
-  <path d="M 560 686 H 580 V 640 H 710 V 648"
+  <!-- A4. app_logs → Logstash (FILE READ, green)
+       app_logs right=480 at y=600 → right to GAP x=496 → up to y=562 → right to Logstash cx x=616 → up to Logstash bottom y=552 -->
+  <path d="M 480 600 H 496 V 562 H 616 V 554"
         stroke="#2e8a5f" stroke-width="1.4" fill="none" marker-end="url(#ag)"/>
-  <rect x="564" y="656" width="60" height="13" rx="2" fill="#f5f5f5"/>
-  <text x="594" y="666" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#2e8a5f">FILE READ</text>
+  <rect x="484" y="575" width="56" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="512" y="585" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#2e8a5f">FILE READ</text>
 
-  <!-- ── 5. Logstash → Elasticsearch (index, green)
-       From: right edge Logstash x=820, y=530
-       To: left edge Elasticsearch x=840, y=530
-       Route: straight (they are adjacent in same row)
-  ── -->
-  <path d="M 820 530 H 838"
+  <!-- A5. Logstash → Elasticsearch (INDEX, green)
+       Logstash right=720, ES left=756. Both in Row 2 y=404..552.
+       Route: right from Logstash right at y=478 to ES left at y=478 via GAP-34 -->
+  <path d="M 720 478 H 754"
         stroke="#2e8a5f" stroke-width="1.4" fill="none" marker-end="url(#ag)"/>
-  <rect x="816" y="514" width="28" height="27" rx="2" fill="#f5f5f5"/>
-  <text x="830" y="526" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7" fill="#2e8a5f">IN-</text>
-  <text x="830" y="538" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7" fill="#2e8a5f">DEX</text>
+  <rect x="720" y="462" width="34" height="26" rx="2" fill="#f5f5f5"/>
+  <text x="737" y="472" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" fill="#2e8a5f">IN-</text>
+  <text x="737" y="483" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7" fill="#2e8a5f">DEX</text>
 
-  <!-- ── 6. Kibana → Elasticsearch (reference, dashed)
-       From: right edge Kibana x=820, y=686
-       To: bottom of Elasticsearch x=950, y=610
-       Route: right to x=828 (gap), up to row-gap y=640, right to x=950, up to y=610
-  ── -->
-  <path d="M 820 686 H 828 V 640 H 950 V 610"
-        stroke="#4f5d75" stroke-width="0.9" fill="none" stroke-dasharray="4,3"
-        marker-end="url(#a)"/>
+  <!-- A6. Kibana → Elasticsearch (reference, dashed)
+       Kibana right=720 at y=600 → right to GAP x=740 → up to y=562 → right to ES cx=856 → up to ES bottom y=552 -->
+  <path d="M 720 600 H 740 V 562 H 856 V 554"
+        stroke="#4f5d75" stroke-width="0.9" fill="none" stroke-dasharray="4,3" marker-end="url(#a)"/>
 
-  <!-- ── 7. Elasticsearch → elk-analyser FastAPI (ES Query, orange)
-       From: right edge of ES x=1060, y=530
-       Through gap lane x=1090
-       To: left edge of FastAPI x=1120, y=420 (mid-upper part)
-       Route: right to x=1090, up to y=420, right to x=1118
-  ── -->
-  <path d="M 1060 530 H 1090 V 420 H 1118"
+  <!-- A7. Elasticsearch → FastAPI (ES QUERY, orange)
+       ES left=756 at y=450 → left to GAP-34 x=740 → up to FastAPI mid y=260 → left to FastAPI right=720 -->
+  <path d="M 756 450 H 740 V 260 H 720"
         stroke="#eb6c36" stroke-width="1.4" fill="none" marker-end="url(#ao)"/>
-  <rect x="1062" y="460" width="56" height="13" rx="2" fill="#f5f5f5"/>
-  <text x="1090" y="470" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#eb6c36">ES QUERY</text>
+  <rect x="718" y="272" width="56" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="746" y="282" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#eb6c36">ES QUERY</text>
 
-  <!-- ── 8. FastAPI → Elasticsearch (return, dashed orange)
-       From: left edge FastAPI x=1120, y=450 (lower)
-       Through gap x=1090
-       To: right edge ES x=1060, y=560
-       Route: left to x=1090, down to y=560, left to x=1062
-  ── -->
-  <path d="M 1120 460 H 1092 V 560 H 1062"
-        stroke="#eb6c36" stroke-width="1.2" fill="none" stroke-dasharray="5,3"
-        marker-end="url(#ao)"/>
-  <rect x="1062" y="486" width="36" height="13" rx="2" fill="#f5f5f5"/>
-  <text x="1080" y="496" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#eb6c36">LOGS</text>
+  <!-- A8. FastAPI → Elasticsearch (LOGS return, dashed orange)
+       FastAPI left=512 at y=380 → left to GAP-23 x=496 → down to ES top y=404 → right to ES mid x=756 -->
+  <path d="M 512 380 H 496 V 404 H 754"
+        stroke="#eb6c36" stroke-width="1.2" fill="none" stroke-dasharray="5,3" marker-end="url(#ao)"/>
+  <rect x="576" y="390" width="36" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="594" y="400" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#eb6c36">LOGS</text>
 
-  <!-- ── 9. FastAPI → Bob CLI (bob run, blue)
-       From: right edge FastAPI x=1360, y=270
-       Through gap x=1390
-       To: left edge Bob CLI x=1430, y=270
-       Route: right to gap x=1390, right to x=1428
-  ── -->
-  <path d="M 1360 270 H 1428"
+  <!-- A9. FastAPI → Bob CLI (bob run, blue)
+       Grafana spans x=756..956, y=140..384. Top-lane approach via y=130.
+       FastAPI top-right x=720, y=148 → up to y=130 → right to Bob CLI left=990 → down to y=148 -->
+  <path d="M 720 148 V 130 H 990 V 148"
         stroke="#2e5aa8" stroke-width="1.3" fill="none" marker-end="url(#ab)"/>
-  <rect x="1362" y="253" width="54" height="13" rx="2" fill="#f5f5f5"/>
-  <text x="1389" y="263" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#2e5aa8">bob run</text>
+  <rect x="832" y="113" width="52" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="858" y="123" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#2e5aa8">bob run</text>
 
-  <!-- ── 10. Bob CLI → FastAPI (insight return, dashed blue)
-       From: left edge Bob CLI x=1430, y=310
-       To: right edge FastAPI x=1360, y=310
-       Route: straight back (different y to avoid overlap with #9)
-  ── -->
-  <path d="M 1430 310 H 1362"
-        stroke="#2e5aa8" stroke-width="1.2" fill="none" stroke-dasharray="5,3"
-        marker-end="url(#ab)"/>
-  <rect x="1362" y="313" width="54" height="13" rx="2" fill="#f5f5f5"/>
-  <text x="1389" y="323" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#2e5aa8">INSIGHT</text>
+  <!-- A10. Bob CLI → FastAPI (INSIGHT return, dashed blue)
+       Bob CLI left=992, y=168 (offset from A9) → left, top-lane y=122 → left to FastAPI top x=616 → down to y=140 -->
+  <path d="M 992 168 V 122 H 616 V 140"
+        stroke="#2e5aa8" stroke-width="1.2" fill="none" stroke-dasharray="5,3" marker-end="url(#ab)"/>
+  <rect x="786" y="105" width="54" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="813" y="115" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#2e5aa8">INSIGHT</text>
 
-  <!-- ── 11. FastAPI → PPTX Report
-       From: right edge FastAPI x=1360, y=350
-       Through gap lane x=1395
-       Down to y=430, right into PPTX Report left edge x=1430, y=430
-  ── -->
-  <path d="M 1360 350 H 1395 V 430 H 1428"
+  <!-- A11. FastAPI → PPTX (PPTX output)
+       FastAPI top-right x=718 (just clear of webui right=716), y=140
+       → up to y=106 (x=718 > webui right, safe) → right to PPTX left x=990 → down to y=306 -->
+  <path d="M 718 140 V 106 H 990 V 306"
         stroke="#4f5d75" stroke-width="1.2" fill="none" marker-end="url(#a)"/>
-  <rect x="1370" y="380" width="36" height="13" rx="2" fill="#f5f5f5"/>
-  <text x="1388" y="390" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#7a8399">PPTX</text>
+  <rect x="826" y="89" width="36" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="844" y="99" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#7a8399">PPTX</text>
 
-  <!-- ── 12. FastAPI → SQLite (persist, down)
-       From: bottom FastAPI x=1240, y=420
-       To: top SQLite x=1240, y=450
-       Route: straight down (same column)
-  ── -->
-  <path d="M 1240 420 V 448"
+  <!-- A12. FastAPI → SQLite (PERSIST, down)
+       FastAPI bottom x=616, y=384 → down to ROW-GAP y=394 → right to SQLite cx=1072 → down to SQLite top y=402 -->
+  <path d="M 616 384 V 394 H 1072 V 402"
         stroke="#4f5d75" stroke-width="1.2" fill="none" marker-end="url(#a)"/>
-  <rect x="1198" y="428" width="52" height="13" rx="2" fill="#f5f5f5"/>
-  <text x="1224" y="438" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#7a8399">PERSIST</text>
+  <rect x="816" y="387" width="52" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="842" y="397" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#7a8399">PERSIST</text>
 
-  <!-- ── 13. Nginx → FastAPI (proxy /api/, dashed)
-       From: bottom Nginx x=1540, y=140 (row 0 bottom)
-       Down to row-gap y=170
-       Left to FastAPI right x=1360, y=240
-       Route: down to y=163, left to x=1362, down to y=240, left to x=1362
-  ── -->
-  <path d="M 1540 140 V 163 H 1375 V 230 H 1362"
-        stroke="#4f5d75" stroke-width="1" fill="none" stroke-dasharray="4,3"
-        marker-end="url(#a)"/>
-  <rect x="1406" y="146" width="68" height="13" rx="2" fill="#f5f5f5"/>
-  <text x="1440" y="156" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#7a8399">PROXY /api/</text>
+  <!-- A13. Nginx → Web UI (/web/, dashed) — same row y=82
+       Nginx left=992 at y=82 → straight left to Web UI right=716 at y=82 -->
+  <path d="M 992 82 H 718"
+        stroke="#4f5d75" stroke-width="1" fill="none" stroke-dasharray="4,3" marker-end="url(#a)"/>
+  <rect x="836" y="65" width="44" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="858" y="75" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#7a8399">/web/</text>
 
-  <!-- ── 14. Kibana Alert / CLI trigger → FastAPI
-       From: right edge trigger box x=280, y=100
-       Route: right to gap x=310, up to top-lane y=30, right to x=1240, down to FastAPI top y=180
-  ── -->
-  <path d="M 280 100 H 310 V 30 H 1240 V 178"
-        stroke="#4f5d75" stroke-width="1" fill="none" stroke-dasharray="4,3"
-        marker-end="url(#a)"/>
-  <rect x="720" y="18" width="68" height="13" rx="2" fill="#f5f5f5"/>
-  <text x="754" y="28" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#7a8399">WEBHOOK</text>
+  <!-- A14. Nginx → Grafana (/grafana/, dashed)
+       Nginx left=992 at y=96 (mid attach) → left to GAP-45 x=976 → down to Grafana top y=140 → left to Grafana right=956 -->
+  <path d="M 992 96 H 976 V 186 H 958"
+        stroke="#4f5d75" stroke-width="1" fill="none" stroke-dasharray="4,3" marker-end="url(#a)"/>
+  <rect x="960" y="112" width="64" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="992" y="122" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#7a8399">/grafana/</text>
 
-  <!-- ── 15. Instana Agent → Liberty (JVM/Sensor monitoring, purple dashed)
-       From: bottom Instana x=440, y=140
-       Route: down to row-gap y=163, left to x=170, down to Liberty top y=178
-  ── -->
-  <path d="M 440 140 V 163 H 170 V 178"
-        stroke="#7c5cd8" stroke-width="1" fill="none" stroke-dasharray="3,2"
-        marker-end="url(#ap)"/>
-  <rect x="250" y="156" width="72" height="13" rx="2" fill="#f5f5f5"/>
-  <text x="286" y="166" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#7c5cd8">JVM AGENT</text>
+  <!-- A15. Nginx → FastAPI (/api/, dashed)
+       Nginx left=992 at y=110 → left to x=976 → up to y=130 → left to FastAPI right x=722 → down to y=220 -->
+  <path d="M 992 110 H 976 V 130 H 722 V 220"
+        stroke="#4f5d75" stroke-width="1" fill="none" stroke-dasharray="4,3" marker-end="url(#a)"/>
+  <rect x="826" y="120" width="64" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="858" y="130" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#7a8399">PROXY /api/</text>
 
-  <!-- ── 16. elk-analyser (instana_collector) → Instana SaaS REST API (REST Query, purple dashed)
-       From: FastAPI / instana_collector x=1240, y=180
-       Route: up to y=100, left to Instana box right edge x=760
-  ── -->
-  <path d="M 1240 178 V 100 H 762"
-        stroke="#7c5cd8" stroke-width="1.2" fill="none" stroke-dasharray="4,3"
-        marker-end="url(#ap)"/>
-  <rect x="910" y="90" width="104" height="13" rx="2" fill="#f5f5f5"/>
-  <text x="962" y="100" text-anchor="middle"
-        font-family="'Geist Mono', monospace" font-size="7.5" fill="#7c5cd8">REST API QUERY</text>
+  <!-- A16. Grafana → FastAPI (POST /analyse, orange solid)
+       Grafana left=756 at y=290 → left to FastAPI right=722 at y=290 via GAP-34 -->
+  <path d="M 756 290 H 724"
+        stroke="#e8820c" stroke-width="1.4" fill="none" marker-end="url(#agr)"/>
+  <rect x="728" y="273" width="68" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="762" y="283" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#e8820c">POST /analyse</text>
 
-  <!-- ══════════════════════════════════════════
+  <!-- A17. FastAPI → Grafana (JOB STATUS, dashed orange)
+       FastAPI right=720 at y=320 → right to Grafana left=754 at y=320 -->
+  <path d="M 720 320 H 754"
+        stroke="#e8820c" stroke-width="1.1" fill="none" stroke-dasharray="5,3" marker-end="url(#agr)"/>
+  <rect x="724" y="303" width="64" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="756" y="313" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#e8820c">JOB STATUS</text>
+
+  <!-- A18. Grafana → Elasticsearch (ES DATASRC, green dashed)
+       Grafana bottom x=856 (right attach), y=384 → down to ROW-GAP-12 y=394 → right to ES left x=754 is wrong dir.
+       Actually ES left is at x=756 and Grafana cx=858. ES is to the LEFT.
+       Route: Grafana bottom-left x=820, y=384 → down to y=394 → left to ES right x=956 is right side of ES.
+       ES cx=856, Grafana cx=858, they are in SAME column! ES at col4, Grafana at col4 too.
+       Grafana top/bottom is at same column as ES. Route straight down:
+       Grafana bottom x=808 (fanned attach, left), y=384 → down to ES top x=808, y=402 -->
+  <path d="M 808 384 V 402"
+        stroke="#2e8a5f" stroke-width="1.1" fill="none" stroke-dasharray="5,3" marker-end="url(#ag)"/>
+  <rect x="762" y="390" width="56" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="790" y="400" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#2e8a5f">ES DATASRC</text>
+
+  <!-- A19. Grafana → PostgreSQL (PG DATASRC, blue dashed)
+       Grafana bottom x=776 (left attach), y=384 → down to ROW-GAP-12 y=394 → left to PG cx x=380 → down to PG top y=402 -->
+  <path d="M 776 384 V 394 H 380 V 402"
+        stroke="#2e5aa8" stroke-width="1.1" fill="none" stroke-dasharray="5,3" marker-end="url(#ab)"/>
+  <rect x="548" y="390" width="72" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="584" y="400" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#2e5aa8">PG DATASRC</text>
+
+  <!-- A20. Instana → Liberty (JVM AGENT, purple dashed)
+       Instana bottom x=148 (Liberty cx), y=116 → down to Liberty top y=138 -->
+  <path d="M 148 116 V 138"
+        stroke="#7c5cd8" stroke-width="1" fill="none" stroke-dasharray="3,2" marker-end="url(#ap)"/>
+  <rect x="100" y="119" width="64" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="132" y="129" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#7c5cd8">JVM AGENT</text>
+
+  <!-- A21. FastAPI → Instana SaaS REST API (REST API QUERY, purple dashed)
+       FastAPI top x=568 (fanned), y=140 → up to y=130 → left to Instana right x=474 → up to Instana bottom y=118 -->
+  <path d="M 568 140 V 130 H 474 V 118"
+        stroke="#7c5cd8" stroke-width="1.2" fill="none" stroke-dasharray="4,3" marker-end="url(#ap)"/>
+  <rect x="486" y="121" width="96" height="13" rx="2" fill="#f5f5f5"/>
+  <text x="534" y="131" text-anchor="middle" font-family="'Geist Mono',monospace" font-size="7.5" fill="#7c5cd8">REST API QUERY</text>
+
+  <!-- ═══════════════════════════════════════════
        LEGEND
-  ═════════════════════════════════════════════ -->
-  <line x1="44" y1="760" x2="1660" y2="760"
-        stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
-  <text x="44" y="778" font-family="'Geist Mono', monospace" font-size="8"
-        letter-spacing="0.15em" fill="#4f5d75">LEGEND</text>
+  ════════════════════════════════════════════ -->
+  <line x1="36" y1="658" x2="1164" y2="658" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+  <text x="36" y="674" font-family="'Geist Mono',monospace" font-size="7.5" letter-spacing="0.15em" fill="#4f5d75">LEGEND</text>
 
-  <rect x="112" y="767" width="11" height="11" rx="2" fill="#fff" stroke="#2d3142" stroke-width="1.2"/>
-  <text x="130" y="778" font-family="'Geist', sans-serif" font-size="9" fill="#4f5d75">App / Backend</text>
+  <rect x="96"  y="663" width="10" height="10" rx="2" fill="#fff" stroke="#2d3142" stroke-width="1.2"/>
+  <text x="112" y="673" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">App / Backend</text>
 
-  <rect x="240" y="767" width="11" height="11" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
-  <text x="258" y="778" font-family="'Geist', sans-serif" font-size="9" fill="#4f5d75">Data store</text>
+  <rect x="200" y="663" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+  <text x="216" y="673" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">Data store</text>
 
-  <rect x="350" y="767" width="11" height="11" rx="2" fill="rgba(46,138,95,0.07)" stroke="rgba(46,138,95,0.55)" stroke-width="1.2"/>
-  <text x="368" y="778" font-family="'Geist', sans-serif" font-size="9" fill="#4f5d75">ELK store</text>
+  <rect x="292" y="663" width="10" height="10" rx="2" fill="rgba(46,138,95,0.07)" stroke="rgba(46,138,95,0.52)" stroke-width="1.2"/>
+  <text x="308" y="673" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">ELK / Log</text>
 
-  <rect x="450" y="767" width="11" height="11" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
-  <text x="468" y="778" font-family="'Geist', sans-serif" font-size="9" fill="#4f5d75">Focal / analyser</text>
+  <rect x="378" y="663" width="10" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.2"/>
+  <text x="394" y="673" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">Analyser (focal)</text>
 
-  <rect x="580" y="767" width="11" height="11" rx="2" fill="rgba(124,92,216,0.07)" stroke="rgba(124,92,216,0.50)" stroke-width="1.2"/>
-  <text x="598" y="778" font-family="'Geist', sans-serif" font-size="9" fill="#4f5d75">Instana APM</text>
+  <rect x="490" y="663" width="10" height="10" rx="2" fill="rgba(232,130,12,0.08)" stroke="#e8820c" stroke-width="1.2"/>
+  <text x="506" y="673" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">Grafana (focal)</text>
 
-  <line x1="700" y1="773" x2="730" y2="773" stroke="#2e5aa8" stroke-width="1.3" marker-end="url(#ab)"/>
-  <text x="736" y="778" font-family="'Geist', sans-serif" font-size="9" fill="#4f5d75">JMS / JDBC</text>
+  <rect x="598" y="663" width="10" height="10" rx="2" fill="rgba(124,92,216,0.07)" stroke="rgba(124,92,216,0.48)" stroke-width="1.2"/>
+  <text x="614" y="673" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">Instana APM</text>
 
-  <line x1="830" y1="773" x2="860" y2="773" stroke="#2e8a5f" stroke-width="1.4" marker-end="url(#ag)"/>
-  <text x="866" y="778" font-family="'Geist', sans-serif" font-size="9" fill="#4f5d75">Log pipeline</text>
+  <line x1="696" y1="668" x2="720" y2="668" stroke="#2e5aa8" stroke-width="1.3" marker-end="url(#ab)"/>
+  <text x="726" y="673" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">JDBC / Datasource</text>
 
-  <line x1="960" y1="773" x2="990" y2="773" stroke="#eb6c36" stroke-width="1.3" marker-end="url(#ao)"/>
-  <text x="996" y="778" font-family="'Geist', sans-serif" font-size="9" fill="#4f5d75">ES Query</text>
+  <line x1="816" y1="668" x2="840" y2="668" stroke="#2e8a5f" stroke-width="1.4" marker-end="url(#ag)"/>
+  <text x="846" y="673" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">Log pipeline</text>
 
-  <line x1="1080" y1="773" x2="1110" y2="773" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#a)"/>
-  <text x="1116" y="778" font-family="'Geist', sans-serif" font-size="9" fill="#4f5d75">Async / proxy</text>
+  <line x1="910" y1="668" x2="934" y2="668" stroke="#eb6c36" stroke-width="1.3" marker-end="url(#ao)"/>
+  <text x="940" y="673" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">ES Query</text>
 
-  <line x1="1220" y1="773" x2="1250" y2="773" stroke="#7c5cd8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#ap)"/>
-  <text x="1256" y="778" font-family="'Geist', sans-serif" font-size="9" fill="#4f5d75">Instana APM / REST</text>
+  <line x1="999" y1="668" x2="1023" y2="668" stroke="#e8820c" stroke-width="1.3" marker-end="url(#agr)"/>
+  <text x="1029" y="673" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">Grafana Webhook</text>
 
-  <rect x="44" y="787" width="14" height="7" rx="2"
-        fill="rgba(46,138,95,0.03)" stroke="rgba(46,138,95,0.30)"
-        stroke-dasharray="5,3" stroke-width="1"/>
-  <text x="64" y="793" font-family="'Geist', sans-serif" font-size="9" fill="#4f5d75">japp-network (10.89.2.0/24)</text>
-  <rect x="280" y="787" width="14" height="7" rx="2"
-        fill="rgba(235,108,54,0.03)" stroke="rgba(235,108,54,0.30)"
-        stroke-dasharray="5,3" stroke-width="1"/>
-  <text x="300" y="793" font-family="'Geist', sans-serif" font-size="9" fill="#4f5d75">elk-analyser-network (10.89.1.0/24) — elk-analyser is dual-homed</text>
+  <text x="36" y="696" font-family="'Geist Mono',monospace" font-size="7.5" letter-spacing="0.10em" fill="#4f5d75">LEGEND (cont.)</text>
+  <line x1="130" y1="691" x2="154" y2="691" stroke="#4f5d75" stroke-width="1.1" stroke-dasharray="5,3" marker-end="url(#a)"/>
+  <text x="160" y="696" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">Async / proxy</text>
+  <line x1="248" y1="691" x2="272" y2="691" stroke="#7c5cd8" stroke-width="1.1" stroke-dasharray="4,3" marker-end="url(#ap)"/>
+  <text x="278" y="696" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">Instana APM / REST</text>
+
+  <rect x="36"  y="706" width="12" height="6" rx="2" fill="rgba(46,138,95,0.03)" stroke="rgba(46,138,95,0.28)" stroke-dasharray="5,3" stroke-width="1"/>
+  <text x="54" y="712" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">japp-network (10.89.2.0/24)</text>
+  <rect x="236" y="706" width="12" height="6" rx="2" fill="rgba(235,108,54,0.03)" stroke="rgba(235,108,54,0.28)" stroke-dasharray="5,3" stroke-width="1"/>
+  <text x="254" y="712" font-family="'Geist',sans-serif" font-size="8.5" fill="#4f5d75">elk-analyser-network (10.89.1.0/24) — elk-analyser &amp; grafana are dual-homed</text>
 
 </svg>
 </div>
@@ -686,6 +532,17 @@
     </ul>
   </div>
   <div class="card">
+    <p class="eyebrow">UNIFIED DASHBOARD</p>
+    <div class="card-header"><span class="card-dot orange"></span><h3>Grafana 11.2</h3></div>
+    <ul>
+      <li><code>grafana</code> — :3000 · dual-homed (10.89.1.20 / 2.60)</li>
+      <li>Infinity plugin 3.7.1 → <code>/api/jobs</code></li>
+      <li>Alerting Webhook → <code>POST /analyse</code></li>
+      <li>Datasource: ES :9200 · PG :5432</li>
+      <li>Dashboard: <code>banking-observability-ai.json</code></li>
+    </ul>
+  </div>
+  <div class="card">
     <p class="eyebrow">OBSERVABILITY</p>
     <div class="card-header"><span class="card-dot purple"></span><h3>Instana APM</h3></div>
     <ul>
@@ -699,7 +556,7 @@
 </div>
 
 <footer>
-  ELK ANALYSER · FULL SYSTEM ARCHITECTURE · 2026-09-15 · BANKING DEMO + INSTANA
+  ELK ANALYSER · FULL SYSTEM ARCHITECTURE · 2026-09-16 · BANKING DEMO + GRAFANA 11.2 + INSTANA
 </footer>
 
 </body>

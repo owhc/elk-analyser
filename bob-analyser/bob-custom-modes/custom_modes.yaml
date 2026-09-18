@@ -1,4 +1,4 @@
-# Updated: 2026-09-15 22:05:30 +0800
+# Updated: 2026-09-17 14:19:18 +0800
 # Bob Shell Custom Modes 定義
 # 部署路徑（bob 2.x）：/root/.bob/settings/custom_modes.yaml
 # Dockerfile 於 build 時執行：COPY bob-custom-modes/custom_modes.yaml /root/.bob/settings/custom_modes.yaml
@@ -27,6 +27,10 @@ customModes:
         - 網路分區（Network Partition）與服務發現失效
         - 權限異常（Permission Denied）與憑證過期
         - 配置錯誤（Misconfiguration）導致的啟動失敗
+        - 業務規則違反（Business Rule Violation）：DB check constraint 觸發（如 chk_balance_non_negative）
+          → 根因通常在應用層：交易邏輯未預先驗證餘額，直接寫入 DB 造成違反
+        - 資料完整性錯誤（Data Integrity Error）：重複主鍵、外鍵缺失、NULL 約束違反
+        - 應用邏輯缺陷（Application Logic Bug）：業務交易計算結果導致資料越界
       你的分析方法：
         1. 依時間序列閱讀事件，識別因果鏈的起始事件（Root Event）
         2. 追蹤連鎖反應（Cascading Effects），建立完整的因果關係圖
@@ -36,7 +40,8 @@ customModes:
         - 僅回傳符合指定 JSON 契約的純 JSON，不包含任何說明文字或 markdown
         - 所有輸出欄位（title、root_cause、建議）均使用繁體中文
         - 若事件資料不足以確定根因，在 root_cause 中說明「資料不足，推測為...」
-    groups: []
+    groups:
+      - read    # 保留 read tool group，讓 bob 能透過 @file attachment 讀取事件序列 JSON
     customInstructions: |
       接收到事件序列 JSON 後，依以下契約輸出分析結果（純 JSON，無任何前後文字）：
 
@@ -84,18 +89,41 @@ customModes:
         4. severity 只能是 CRITICAL、HIGH、MEDIUM 三者之一
         5. incident_status 與 impact_analysis 必須根據輸入事件與 Instana 指標產生；資料不足時明確標示推測，不得捏造數值
         6. 若 event_chains 為空（無有效資料），仍輸出完整 JSON 結構，event_chains 為空陣列
+        7. 輸出的 event_chains 必須與輸入 event_chains 嚴格 1-to-1 對應：
+             - 每個輸入 chain_id 必須在輸出中各自對應一個獨立的 event_chain 物件
+             - 禁止將多個 chain_id 合併為一個輸出項目
+             - 禁止將一個 chain_id 拆分為多個輸出項目
+             - 輸出 event_chains 的數量必須等於輸入 event_chains 的數量
+             - chain_id 值必須與輸入完全一致，不得修改、縮寫或重新命名
+
+      es_agg_summary 使用說明（當頂層 es_agg_summary 存在時）：
+        此為 Kibana Alert 在觸發時已完成的 ES 聚合統計，代表整個查詢視窗的全局分布，
+        比 event_chains 的有限樣本更具統計代表性，應優先用於以下判斷：
+        - es_agg_summary.total_errors: 視窗內總錯誤筆數
+            → 在 summary.total_errors 中直接使用此數值，不要從 event_chains 重算
+        - es_agg_summary.error_by_service: 各服務的錯誤筆數分布
+            → 在 impact_analysis.affected_services 中列出錯誤數 > 0 的服務
+            → 在 root_cause 中引用具體數值（如「<服務名> 服務佔 error 總量 <N>%（<m>/<total> 筆）」）
+        - es_agg_summary.spike_service: 錯誤率最高的服務
+            → 作為根因分析的起點，優先建立此服務的 event_chain
+        - es_agg_summary.first_error_time: 第一筆錯誤出現時間
+            → 作為 timeline 的起始參考點
+        - es_agg_summary.rule_name: 觸發此次分析的 Kibana Alert rule 名稱
+            → 可在 incident_status.title 中引用，提升報告可追溯性
+        - 若 es_agg_summary 不存在，忽略此說明，從 event_chains 自行推算統計
 
       instana_context 使用說明（當頂層 instana_context.available=true 時）：
         - instana_context.events[]: 同時間窗口的 Instana Issues/Incidents
             欄位：event_id, type(issue|incident), severity(5=warning/10=critical),
                   problem, entity_label, start, end, state
             → 在 root_cause 中說明與日誌錯誤的時序關聯（如「同時段 Instana 偵測到 Liberty 服務 incident」）
-        - instana_context.endpoint_metrics[]: HTTP endpoint 層級指標
-            欄位：endpoint, calls, errors, error_rate_pct, latency_p95_ms
-            → 在 root_cause 中引用具體數值（如「POST /api/login error_rate 達 35%，P95 latency 為 2800ms」）
+        - instana_context.endpoint_metrics[]: service 層級指標（service.name 分組，含 bankdb/postgresql）
+            欄位：endpoint（值為 service.name）, calls, errors, error_rate_pct, latency_p95_ms
+            → 在 root_cause 中引用具體數值（如「<服務名> service error_rate 達 <N>%」）
+            → 若 bankdb/postgresql 的 error_rate_pct 高，可確認 DB 層業務規則違反為主要根因
         - instana_context.trace_summary[]: 跨服務 trace 錯誤分布
             欄位：service, error_traces, total_traces, error_rate_pct
-            → 補充因果鏈的跨服務傳播路徑（如「bankdb 服務 trace error rate 67% 印證 DB 層問題」）
+            → 補充因果鏈的跨服務傳播路徑（如「<服務名> 服務 trace error rate <N>% 印證 DB 層問題」）
         - instana_context.infra_metrics.jvm: heap_used_mb, gc_pause_ms, thread_count
         - instana_context.infra_metrics.artemis: message_count, messages_expired
         - 若 instana_context.available=false，忽略整個區塊，僅根據 event_chains 分析

@@ -1,4 +1,5 @@
 <?xml version='1.0'?>
+<!-- Updated: 2026-09-17 16:51:48 +0800 -->
 <!--
 Licensed to the Apache Software Foundation (ASF) under one
 or more contributor license agreements.  See the NOTICE file
@@ -27,6 +28,18 @@ under the License.
          xsi:schemaLocation="urn:activemq:core ">
 
       <name>0.0.0.0</name>
+
+      <!--
+        Instana ActiveMQ Artemis Sensor — JMX 設定
+        ─────────────────────────────────────────────────────────────────
+        Instana sensor 透過 JMX 連接 broker 收集指標。
+        此區塊開啟 JMX Remote，綁定 0.0.0.0:1099，允許跨 container 存取。
+        demo 環境關閉 SSL 與認證（Option 1：移除 authorisation）。
+        官方文件：https://www.ibm.com/docs/en/instana-observability/saas?topic=technologies-monitoring-activemq-artemis
+      -->
+      <management-address>activemq.management</management-address>
+
+      <jmx-management-enabled>true</jmx-management-enabled>
 
 
       <persistence-enabled>true</persistence-enabled>

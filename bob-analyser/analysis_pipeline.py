@@ -1,4 +1,4 @@
-# Updated: 2026-09-16 08:06:45 +0800
+# Updated: 2026-09-17 08:54:33 +0800
 """
 analysis_pipeline.py
 ────────────────────
@@ -33,6 +33,8 @@ def run_analysis(
     config_path: str = "/app/config/config.yaml",
     row_id: int = None,
     instana_context: dict = None,
+    spike_service: str = "",
+    es_agg_summary: dict = None,
 ) -> dict:
     """
     執行一次完整的分析流程：
@@ -43,6 +45,8 @@ def run_analysis(
                         避免重複建立（F-02）；為 None 時自行建立。
         instana_context 由 api.py _resolve_instana_context() 解析後傳入；
                         None 表示純 ELK 模式（向後相容）。
+        spike_service   層二精準限縮：非空時 ES 查詢加 service terms filter。
+        es_agg_summary  層三精準限縮：Kibana 聚合摘要，注入 event_sequence 頂層。
 
     回傳：
         { "job_id": str, "status": str, "report_path": str|None,
@@ -63,13 +67,14 @@ def run_analysis(
     )
 
     try:
-        # Step 1：提取
-        raw_logs = extract(query_from, query_to, cfg)
+        # Step 1：提取（層二：spike_service 非空時只拉該服務日誌）
+        raw_logs = extract(query_from, query_to, cfg, spike_service=spike_service)
         logger.info("提取完成：%d 筆", len(raw_logs))
 
-        # Step 2：預處理（含 Instana context 注入）
+        # Step 2：預處理（含 Instana context 與層三 es_agg_summary 注入）
         event_sequence = preprocess(raw_logs, job_id, query_from, query_to, cfg,
-                                    instana_context=instana_context)
+                                    instana_context=instana_context,
+                                    es_agg_summary=es_agg_summary)
 
         # Step 3：Bob CLI 分析（在 ThreadPoolExecutor 中執行，不阻塞 event loop）
         # bob_timeout + 15s 緩衝對應 _run_bob 的 timeout+10 設定

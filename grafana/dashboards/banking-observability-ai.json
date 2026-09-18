@@ -1,0 +1,1075 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": true,
+      "title": "備用 Web UI 控制台",
+      "tooltip": "開啟原 Web UI 進行詳細操作與解說",
+      "type": "link",
+      "url": "/web/"
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "content": "<div style=\"background:linear-gradient(135deg, #0d1b2a 0%, #1a3550 50%, #112240 100%); padding:16px 22px; border-radius:10px; border:1px solid #2b7de9; box-shadow:0 4px 12px rgba(0,0,0,0.3); font-family:system-ui,-apple-system,sans-serif;\">\n  <div style=\"display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid rgba(43,125,233,0.25); padding-bottom:8px;\">\n    <div style=\"display:flex; align-items:center; gap:8px;\">\n      <span style=\"font-size:1.3rem;\">🤖</span>\n      <h3 style=\"margin:0; color:#93c5fd; font-size:1.15rem; font-weight:700;\">Bob AI 智慧根因診斷控制中心</h3>\n      <span style=\"background:rgba(43,125,233,0.18); border:1px solid rgba(43,125,233,0.4); color:#93c5fd; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:600;\">v2.0 Dual-Trigger</span>\n    </div>\n    <div style=\"display:flex; gap:8px; align-items:center;\">\n      <a href=\"/web/\" target=\"_blank\" style=\"background:rgba(255,255,255,0.08); color:#e2e8f0; padding:6px 14px; border-radius:5px; text-decoration:none; font-size:0.82rem; border:1px solid rgba(255,255,255,0.2); display:flex; align-items:center; gap:4px;\">🖥 開啟完整 Web UI</a>\n    </div>\n  </div>\n\n  <div style=\"display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px;\">\n    <!-- 模式 1：手動指定特定日期時間 (Web UI 模式) -->\n    <div style=\"display:flex; align-items:center; gap:8px; background:rgba(0,0,0,0.25); padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.1);\">\n      <span style=\"color:#94a3b8; font-size:0.82rem; font-weight:600;\">🗓 自選時段：</span>\n      <input type=\"datetime-local\" id=\"ctrl-from-time\" style=\"background:#0f172a; border:1px solid #334155; color:#e2e8f0; border-radius:4px; padding:4px 8px; font-size:0.82rem; outline:none;\">\n      <span style=\"color:#64748b; font-size:0.82rem;\">至</span>\n      <input type=\"datetime-local\" id=\"ctrl-to-time\" style=\"background:#0f172a; border:1px solid #334155; color:#e2e8f0; border-radius:4px; padding:4px 8px; font-size:0.82rem; outline:none;\">\n      <button id=\"btn-custom-trigger\" onclick=\"\n        const fromVal = document.getElementById('ctrl-from-time').value;\n        const toVal   = document.getElementById('ctrl-to-time').value;\n        if (!fromVal || !toVal) {\n          alert('⚠️ 請先選取開始時間與結束時間！');\n          return;\n        }\n        const btn = this;\n        btn.disabled = true;\n        btn.innerText = '⏳ 診斷中...';\n        const fromTime = fromVal.replace('T', ' ');\n        const toTime   = toVal.replace('T', ' ');\n        fetch('/api/analyse/async', {\n          method: 'POST',\n          headers: {'Content-Type': 'application/json'},\n          body: JSON.stringify({from_time: fromTime, to_time: toTime, trigger: 'grafana_custom_time', with_instana: true})\n        }).then(r => r.json()).then(d => {\n          alert('🚀 自訂時段 AI 診斷已啟動！\\n──────────────────\\n任務 ID: #' + (d.job_id || 'OK') + '\\n分析時段: ' + fromTime + ' ~ ' + toTime + '\\n\\n分析完成後將自動更新下方歷史任務清單。');\n          btn.disabled = false;\n          btn.innerText = '▶ 診斷此指定時段';\n        }).catch(e => {\n          alert('❌ 啟動失敗: ' + e);\n          btn.disabled = false;\n          btn.innerText = '▶ 診斷此指定時段';\n        });\n      \" style=\"background:#2563eb; color:white; border:none; padding:5px 14px; border-radius:4px; font-weight:600; cursor:pointer; font-size:0.82rem; transition:background 0.2s;\">▶ 診斷此指定時段</button>\n    </div>\n\n    <!-- 模式 2：自動讀取上方時間選擇器 (一鍵同步) -->\n    <div style=\"display:flex; align-items:center; gap:8px;\">\n      <span style=\"color:#94a3b8; font-size:0.82rem;\">或</span>\n      <button id=\"btn-trigger-ai\" onclick=\"\n        const btn = this;\n        btn.disabled = true;\n        btn.style.opacity = '0.7';\n        btn.innerText = '⏳ 啟動中...';\n        const urlParams = new URLSearchParams(window.location.search);\n        let fromTime = urlParams.get('from') || 'now-1h';\n        let toTime = urlParams.get('to') || 'now';\n        if (/^\\d{13}$/.test(fromTime)) fromTime = new Date(parseInt(fromTime)).toISOString();\n        if (/^\\d{13}$/.test(toTime)) toTime = new Date(parseInt(toTime)).toISOString();\n        fetch('/api/analyse/async', {\n          method: 'POST',\n          headers: {'Content-Type': 'application/json'},\n          body: JSON.stringify({from_time: fromTime, to_time: toTime, trigger: 'grafana_timepicker', with_instana: true})\n        }).then(r => r.json()).then(d => {\n          alert('🚀 依當前儀表板時間範圍 AI 診斷已啟動！\\n──────────────────\\n任務 ID: #' + (d.job_id || 'OK') + '\\n時間範圍: ' + fromTime + ' ~ ' + toTime);\n          btn.disabled = false;\n          btn.style.opacity = '1';\n          btn.innerText = '⚡ 依儀表板時間軸診斷';\n        }).catch(e => {\n          alert('❌ 啟動失敗: ' + e);\n          btn.disabled = false;\n          btn.style.opacity = '1';\n          btn.innerText = '⚡ 依儀表板時間軸診斷';\n        });\n      \" style=\"background:linear-gradient(135deg, #10b981 0%, #059669 100%); color:white; border:none; padding:8px 18px; border-radius:6px; font-weight:700; cursor:pointer; font-size:0.84rem; box-shadow:0 2px 6px rgba(16,185,129,0.3);\">⚡ 依儀表板時間軸診斷</button>\n    </div>\n  </div>\n</div>",
+        "mode": "html"
+      },
+      "pluginVersion": "11.2.0",
+      "title": "",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 5
+      },
+      "id": 5,
+      "title": "🎯 累積分析任務數",
+      "type": "stat",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "ELK-Analyser-API"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "count"
+          ],
+          "fields": "/^id$/",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "ELK-Analyser-API"
+          },
+          "filters": [],
+          "format": "table",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "http://elk-analyser:8080/jobs?limit=50",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 5
+      },
+      "id": 6,
+      "title": "✅ 任務完成數 (Completed)",
+      "type": "stat",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "ELK-Analyser-API"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "count"
+          ],
+          "fields": "/^status$/",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "ELK-Analyser-API"
+          },
+          "filters": [],
+          "format": "table",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "http://elk-analyser:8080/jobs?limit=50",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 5
+      },
+      "id": 7,
+      "title": "🔍 最新任務狀態",
+      "type": "stat",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "ELK-Analyser-API"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "completed": {
+                  "color": "green",
+                  "text": "Completed"
+                },
+                "failed": {
+                  "color": "red",
+                  "text": "Failed"
+                },
+                "running": {
+                  "color": "yellow",
+                  "text": "Running"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "first"
+          ],
+          "fields": "/^status$/",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "status",
+              "text": "status",
+              "type": "string"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "ELK-Analyser-API"
+          },
+          "filters": [],
+          "format": "table",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "http://elk-analyser:8080/jobs?limit=1&_t=${__to}",
+          "url_options": {
+            "method": "GET",
+            "cache_timeout_ms": 0
+          }
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 5
+      },
+      "id": 8,
+      "title": "⚡ 最新觸發方式",
+      "type": "stat",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "ELK-Analyser-API"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "first"
+          ],
+          "fields": "/^trigger_mode$/",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "trigger_mode",
+              "text": "trigger_mode",
+              "type": "string"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "ELK-Analyser-API"
+          },
+          "filters": [],
+          "format": "table",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "http://elk-analyser:8080/jobs?limit=1&_t=${__to}",
+          "url_options": {
+            "method": "GET",
+            "cache_timeout_ms": 0
+          }
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 11,
+      "title": "💡 最新任務 AI 根因推論重點 (Latest Root Cause Insight)",
+      "type": "table",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "ELK-Analyser-API"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "下載最新報告"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "📥 下載 PPTX 報告",
+                    "url": "/api/jobs/${__data.fields.id}/report",
+                    "targetBlank": true
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "color-background"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "狀態"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "completed": {
+                        "color": "green",
+                        "text": "✅ Completed"
+                      },
+                      "failed": {
+                        "color": "red",
+                        "text": "❌ Failed"
+                      },
+                      "running": {
+                        "color": "yellow",
+                        "text": "⏳ Running"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "id",
+              "text": "任務編號",
+              "type": "string"
+            },
+            {
+              "selector": "status",
+              "text": "狀態",
+              "type": "string"
+            },
+            {
+              "selector": "trigger_mode",
+              "text": "觸發模式",
+              "type": "string"
+            },
+            {
+              "selector": "primary_root_cause",
+              "text": "🔴 主要根本原因 (Root Cause)",
+              "type": "string"
+            },
+            {
+              "selector": "immediate_action",
+              "text": "💡 優先建議措施 (Immediate Action)",
+              "type": "string"
+            },
+            {
+              "selector": "id",
+              "text": "下載最新報告",
+              "type": "string"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "ELK-Analyser-API"
+          },
+          "format": "table",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "http://elk-analyser:8080/jobs?limit=1&_t=${__to}",
+          "url_options": {
+            "method": "GET",
+            "cache_timeout_ms": 0
+          }
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 2,
+      "title": "📊 銀行應用錯誤與警報日誌分佈 (Elasticsearch)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "Elasticsearch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "links": [
+            {
+              "title": "🎯 以此時間點啟動 Bob AI 診斷",
+              "url": "/api/analyse/trigger?time=${__value.time}&trigger=grafana_datalink",
+              "targetBlank": true
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        }
+      },
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "auto"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "Elasticsearch"
+          },
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "log.level:(ERROR OR FATAL OR CRITICAL)",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 3,
+      "title": "💾 銀行資料庫連線與交易狀態 (PostgreSQL)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "postgres",
+        "uid": "Banking-PostgreSQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "axisPlacement": "auto"
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "links": [
+            {
+              "title": "🎯 以此時間點啟動 Bob AI 診斷",
+              "url": "/api/analyse/trigger?time=${__value.time}&trigger=grafana_datalink",
+              "targetBlank": true
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "Banking-PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT now() AS \"time\", count(*) AS active_connections FROM pg_stat_activity WHERE state = 'active';",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 9,
+      "title": "📬 Artemis MQ 訊息佇列活動 (bankingQueue)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "Elasticsearch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "axisPlacement": "auto"
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "links": [
+            {
+              "title": "🎯 以此時間點啟動 Bob AI 診斷",
+              "url": "/api/analyse/trigger?time=${__value.time}&trigger=grafana_datalink",
+              "targetBlank": true
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "auto"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "Elasticsearch"
+          },
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "message:(*bankingQueue* OR *Artemis* OR *MDB*)",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 10,
+      "title": "⚡ Instana APM 應用服務與端點異常遙測 (banking-app)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "Elasticsearch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "axisPlacement": "auto"
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "links": [
+            {
+              "title": "🎯 以此時間點啟動 Bob AI 診斷",
+              "url": "/api/analyse/trigger?time=${__value.time}&trigger=grafana_datalink",
+              "targetBlank": true
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "bucketAggs": [
+            {
+              "field": "@timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "auto"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "Elasticsearch"
+          },
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "service:\"banking-app-liberty\" OR message:(*Instana* OR *trace* OR *transfer* OR *account*)",
+          "refId": "A",
+          "timeField": "@timestamp"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 4,
+      "title": "📋 Bob AI 歷史分析任務清單 (Enhanced Mission History)",
+      "type": "table",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "ELK-Analyser-API"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "執行狀態"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "completed": {
+                        "color": "green",
+                        "text": "Completed"
+                      },
+                      "failed": {
+                        "color": "red",
+                        "text": "Failed"
+                      },
+                      "running": {
+                        "color": "yellow",
+                        "text": "Running"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "觸發來源"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "basic",
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "grafana_alert": {
+                        "color": "red",
+                        "text": "🚨 Grafana Alert"
+                      },
+                      "grafana_timepicker": {
+                        "color": "blue",
+                        "text": "🎯 Timepicker (手動)"
+                      },
+                      "grafana_manual": {
+                        "color": "blue",
+                        "text": "🖱 Grafana (手動)"
+                      },
+                      "kibana_alert": {
+                        "color": "orange",
+                        "text": "🔔 Kibana Alert"
+                      },
+                      "webui_instana": {
+                        "color": "purple",
+                        "text": "🖥 Web UI"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "診斷報告"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "📥 下載 PPTX 報告",
+                    "url": "/api/jobs/${__data.fields.任務編號}/report",
+                    "targetBlank": true
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "color-background"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "footer": {
+          "countRows": true,
+          "fields": "",
+          "reducer": [
+            "count"
+          ],
+          "show": true
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "任務編號"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "id",
+              "text": "任務編號",
+              "type": "string"
+            },
+            {
+              "selector": "status",
+              "text": "執行狀態",
+              "type": "string"
+            },
+            {
+              "selector": "trigger_mode",
+              "text": "觸發來源",
+              "type": "string"
+            },
+            {
+              "selector": "query_from",
+              "text": "分析起點 (From)",
+              "type": "string"
+            },
+            {
+              "selector": "query_to",
+              "text": "分析終點 (To)",
+              "type": "string"
+            },
+            {
+              "selector": "started_at",
+              "text": "發起時間",
+              "type": "string"
+            },
+            {
+              "selector": "id",
+              "text": "診斷報告",
+              "type": "string"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "ELK-Analyser-API"
+          },
+          "filters": [],
+          "format": "table",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "http://elk-analyser:8080/jobs?limit=20",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": [
+    "elk-analyser",
+    "instana",
+    "artemis-mq",
+    "ai-observability"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "timezone": "browser",
+  "title": "ELK Analyser — 統一可觀測性與 AI 診斷儀表板",
+  "uid": "elk-analyser-ai-obs",
+  "version": 5
+}

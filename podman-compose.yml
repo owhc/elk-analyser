@@ -1,5 +1,5 @@
-# Updated: 2026-09-15 22:12:50 +0800
-# podman-compose.yml — 整合版（elk-analyser + japp-demo 一次 deploy）
+# Updated: 2026-09-17 16:51:48 +0800
+# podman-compose.yml — 整合版（elk-analyser + japp-demo + grafana 一次 deploy）
 #
 # ── 先決條件 ───────────────────────────────────────────────────────
 #   1. 編譯 Spring Boot WAR（首次或程式碼變更後）：
@@ -14,7 +14,8 @@
 #   podman exec banking-db psql -U db2inst1 -d bankdb -f /docker-entrypoint-initdb.d/01-schema.sql
 #
 # ── 服務清單 ───────────────────────────────────────────────────────
-#   elk-analyser-web  :3001  — ELK Analyser Nginx 前端
+#   elk-analyser-web  :3001  — 統一 Gateway 入口（/grafana/, /web/, /api/）
+#   grafana           (3000) — 統一可觀測性與 AI 診斷儀表板
 #   elk-analyser      :8080  — ELK Analyser FastAPI 後端
 #   banking-app       :9080  — WAS Liberty 銀行應用 / :5672 Artemis MQ
 #   banking-db        :50000 — PostgreSQL 資料庫
@@ -25,22 +26,23 @@
 services:
 
   # ════════════════════════════════════════════════════════════════
-  # ELK ANALYSER 群組
+  # ELK ANALYSER & GRAFANA 統一入口群組
   # ════════════════════════════════════════════════════════════════
 
-  # ── Web UI（Nginx 靜態前端 + API proxy）──────────────────────────
+  # ── 統一 Gateway（Nginx 反向代理：/grafana/, /web/, /api/）─────────
   web:
     build:
       context: ./web
       dockerfile: Dockerfile
     container_name: elk-analyser-web
     ports:
-      - "3001:80"           # ELK Analyser UI
+      - "3001:80"           # 統一服務 Gateway
     networks:
       - elk-analyser-network
     restart: unless-stopped
     depends_on:
       - elk-analyser
+      - grafana
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:80"]
       interval: 30s
@@ -81,6 +83,36 @@ services:
       retries: 3
       start_period: 15s
 
+  # ── Grafana 統一可觀測性與 AI 診斷平台 ─────────────────────────────
+  grafana:
+    image: docker.io/grafana/grafana:11.2.0
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_SIGNOUT_MENU=true
+      - GF_PANELS_DISABLE_SANITIZE_HTML=true
+      - GF_SERVER_ROOT_URL=http://localhost:3001/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_INSTALL_PLUGINS=yesoreyeram-infinity-datasource 3.7.1
+      - TZ=Asia/Taipei
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro,z
+    networks:
+      elk-analyser-network:
+        ipv4_address: 10.89.1.20
+      japp-network:
+        ipv4_address: 10.89.2.60
+    restart: unless-stopped
+    depends_on:
+      - elasticsearch
+      - banking-db
+      - elk-analyser
+
   # ════════════════════════════════════════════════════════════════
   # INSTANA HOST AGENT
   # ════════════════════════════════════════════════════════════════
@@ -93,7 +125,9 @@ services:
     privileged: true
     pid: host
     volumes:
-      - instana-agent-config:/opt/instana/agent/etc/instana
+      # 改為 bind mount，讓 instana-agent-package/configuration.yaml 直接生效
+      # 不需重建 image，修改設定後只需 podman-compose restart instana-agent
+      - ./instana-agent-package:/opt/instana/agent/etc/instana:z
     environment:
       INSTANA_AGENT_KEY:            "uBp4GXpZQpKrHxMXNcvInQ"
       INSTANA_DOWNLOAD_KEY:         "uBp4GXpZQpKrHxMXNcvInQ"
@@ -131,6 +165,8 @@ services:
       - "0.0.0.0:${LIBERTY_HTTPS_PORT:-9443}:9443"  # WAS Liberty HTTPS
       - "0.0.0.0:${ARTEMIS_PORT:-5672}:5672"         # ActiveMQ Artemis AMQP
       - "0.0.0.0:${ARTEMIS_MGMT_PORT:-8161}:8161"   # Artemis 管理 UI
+      - "127.0.0.1:1099:1099"                        # Artemis JMX Registry（Instana sensor，僅本機）
+      - "127.0.0.1:2099:2099"                        # Artemis JMX RMI Server（Instana sensor，僅本機）
     volumes:
       # Liberty 設定（volume mount，不重建 image）
       - ./japp-demo/container-japp/liberty-config/server.xml:/config/server.xml:z
@@ -328,13 +364,15 @@ networks:
 # Volumes
 # ════════════════════════════════════════════════════════════════
 volumes:
-  # ELK Analyser 持久化
+  # ELK Analyser & Grafana 持久化
   bob_workspace:
     name: bob_workspace
   elk_reports:
     name: elk_reports
   elk_db:
     name: elk_db
+  grafana_data:
+    name: grafana_data
 
   # japp-demo 持久化
   app_logs:           # 共享日誌：container-japp 寫入，logstash 讀取
@@ -344,6 +382,7 @@ volumes:
   es_data:
     driver: local
 
-  # Instana agent 持久化設定
-  instana-agent-config:
-    driver: local
+  # instana-agent-config named volume 已改為 bind mount（./instana-agent-package）
+  # 保留此條目避免 podman-compose up 時報 volume 未定義的警告（如有舊 stack 仍引用）
+  # instana-agent-config:
+  #   driver: local

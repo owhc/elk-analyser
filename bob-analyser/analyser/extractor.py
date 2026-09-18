@@ -1,4 +1,4 @@
-# Updated: 2026-08-27 18:08:17 +0800
+# Updated: 2026-09-17 14:41:25 +0800
 """
 analyser/extractor.py
 ─────────────────────
@@ -69,10 +69,13 @@ def _query_elasticsearch(
     config,
     query_from: datetime,
     query_to: datetime,
+    spike_service: str = "",
 ) -> list[dict]:
     """
     透過 elasticsearch-py 查詢真實 ES，支援 scroll 分頁。
     若 ES 套件未安裝或連線失敗，記錄錯誤並回傳空列表。
+
+    spike_service：若非空，加入 terms filter 只拉該服務的日誌（層二精準限縮）。
     """
     try:
         from elasticsearch import Elasticsearch  # type: ignore
@@ -117,11 +120,56 @@ def _query_elasticsearch(
         },
     ]
 
+    # 層二精準限縮：spike_service 非空時，只拉該服務的日誌
+    if spike_service:
+        must_clauses.append({"term": {fm.get("service", "service.name"): spike_service}})
+        logger.info("層二精準限縮：只查詢 service=%s 的日誌", spike_service)
+
     # 額外關鍵字過濾
     for kw in filter_cfg.get("keywords", []):
         must_clauses.append({"match": {fm["message"]: kw}})
 
-    query_body = {"query": {"bool": {"must": must_clauses}}, "sort": [{fm["timestamp"]: "asc"}]}
+    # 排除 Liberty SystemErr/SystemOut 的「假 ERROR」噪音：
+    # Logstash 將 Liberty 的 SystemErr → ERROR，但這些是 Java stderr 輸出，
+    # 大量包含正常 INFO 業務日誌而非真正的錯誤。
+    # 排除策略：
+    #   - module=SystemOut：全排除（Logstash 已轉 INFO，不應出現在 ERROR 查詢中）
+    #   - module=SystemErr：排除不含真實錯誤關鍵字的文件（保留含 Exception/SEVERE/violates 的）
+    _liberty_error_keywords = [
+        "Exception", "SEVERE", "violates", "FAILED", "SQLException",
+        "NullPointerException", "OutOfMemoryError", "StackOverflowError",
+        "ConnectException", "TimeoutException", "java.lang.Error",
+    ]
+    must_not_clauses = [
+        # 排除 SystemOut（全部）
+        {
+            "bool": {
+                "must": [
+                    {"term": {"service.keyword": "was-liberty"}},
+                    {"term": {"module.keyword": "SystemOut"}},
+                ]
+            }
+        },
+        # 排除 SystemErr 中不含真實錯誤關鍵字的文件
+        {
+            "bool": {
+                "must": [
+                    {"term": {"service.keyword": "was-liberty"}},
+                    {"term": {"module.keyword": "SystemErr"}},
+                ],
+                "must_not": [
+                    {"bool": {"should": [
+                        {"match_phrase": {"message": kw}} for kw in _liberty_error_keywords
+                    ], "minimum_should_match": 1}},
+                ],
+            }
+        },
+    ]
+
+    query_body = {
+        "query": {"bool": {"must": must_clauses, "must_not": must_not_clauses}},
+        "sort": [{fm["timestamp"]: "asc"}],
+    }
 
     results = []
     max_hits = filter_cfg.get("max_hits", 5000)
@@ -166,14 +214,16 @@ def extract(
     query_from: datetime,
     query_to: datetime,
     config=None,
+    spike_service: str = "",
 ) -> list[dict]:
     """
     主要提取函式。依 config.yaml 的 mode 決定使用 Mock 或真實 ES。
 
     參數：
-        query_from  查詢視窗開始時間（含時區資訊）
-        query_to    查詢視窗結束時間（含時區資訊）
-        config      AppConfig 實例（或原始 dict，向後相容）
+        query_from    查詢視窗開始時間（含時區資訊）
+        query_to      查詢視窗結束時間（含時區資訊）
+        config        AppConfig 實例（或原始 dict，向後相容）
+        spike_service 層二精準限縮：非空時 ES 查詢加入 service terms filter
 
     回傳：
         原始日誌文件列表，每個元素為 ES _source 字典
@@ -183,13 +233,14 @@ def extract(
         config = AppConfig.load()
     mode = config.es_mode if hasattr(config, "es_mode") else config["elasticsearch"].get("mode", "mock")
     logger.info(
-        "開始提取日誌 [模式=%s] 查詢視窗：%s → %s",
+        "開始提取日誌 [模式=%s] 查詢視窗：%s → %s%s",
         mode,
         query_from.isoformat(),
         query_to.isoformat(),
+        f" spike_service={spike_service}" if spike_service else "",
     )
 
     if mode == "mock":
         return _load_mock_logs(config, query_from, query_to)
     else:
-        return _query_elasticsearch(config, query_from, query_to)
+        return _query_elasticsearch(config, query_from, query_to, spike_service=spike_service)

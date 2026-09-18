@@ -1,0 +1,23 @@
+# Created: 2026-09-16 21:24:28 +0800
+# Grafana Alerting Provisioning Configuration
+# 自動配置 Webhook Contact Point 與 Notification Policy 對接 ELK Analyser
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: ELK-Analyser-AI-Webhook
+    receivers:
+      - uid: elk_analyser_webhook
+        type: webhook
+        settings:
+          url: http://elk-analyser:8080/analyse
+          httpMethod: POST
+          maxAlerts: 1
+
+policies:
+  - orgId: 1
+    receiver: ELK-Analyser-AI-Webhook
+    group_by: ['grafana_folder', 'alertname']
+    group_wait: 10s
+    group_interval: 1m
+    repeat_interval: 1h

@@ -1,4 +1,4 @@
-# Updated: 2026-09-15 19:58:12 +0800
+# Updated: 2026-09-17 12:06:42 +0800
 """
 cli.py
 ──────
@@ -12,8 +12,10 @@ elk-analyser CLI 入口（click 子指令風格）。
 
 import json
 import logging
+import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import click
 
@@ -53,10 +55,15 @@ def run(from_time, to_time, with_instana, config):
     """執行一次分析任務（需指定 --from 與 --to）。"""
     from analysis_pipeline import run_analysis
 
+    _tz_name = os.environ.get("TZ") or "UTC"
+    try:
+        _local_tz = ZoneInfo(_tz_name)
+    except Exception:
+        _local_tz = datetime.now().astimezone().tzinfo
     try:
         fmt = "%Y-%m-%d %H:%M"
-        qf = datetime.strptime(from_time, fmt).replace(tzinfo=timezone.utc)
-        qt = datetime.strptime(to_time, fmt).replace(tzinfo=timezone.utc)
+        qf = datetime.strptime(from_time, fmt).replace(tzinfo=_local_tz)
+        qt = datetime.strptime(to_time, fmt).replace(tzinfo=_local_tz)
     except ValueError:
         click.echo("錯誤：時間格式應為 'YYYY-MM-DD HH:MM'", err=True)
         sys.exit(1)

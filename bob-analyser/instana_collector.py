@@ -1,5 +1,5 @@
 # Created: 2026-09-15 19:58:12 +0800
-# Updated: 2026-09-15 21:43:39 +0800
+# Updated: 2026-09-17 14:19:18 +0800
 """
 instana_collector.py
 ────────────────────
@@ -121,7 +121,14 @@ def collect_endpoint_metrics(
 ) -> list:
     """
     POST /api/application-monitoring/metrics/applications — grouped calls metrics。
-    回傳 endpoint 層級的 calls/errors/latency P95，失敗回傳空列表。
+    依 service.name 分組（涵蓋 was-liberty + bankdb + artemis 所有服務），
+    回傳 service 層級的 calls/errors/latency P95，失敗回傳空列表。
+
+    改為按 service.name 分組（原為 endpoint.name），原因：
+      - endpoint.name 只涵蓋 HTTP endpoints，DB call 層的 check constraint
+        violation（如 chk_balance_non_negative）不會出現在 endpoint 層級；
+      - service.name 分組可同時看到 bankdb / postgresql 服務的 error call 數量，
+        使 Bob 能識別 DB 業務規則違反（Business Rule Violation）模式。
     """
     try:
         payload = {
@@ -131,7 +138,7 @@ def collect_endpoint_metrics(
                 {"metric": "latency", "aggregation": "P95"},
             ],
             "group": {
-                "groupbyTag": "endpoint.name",
+                "groupbyTag": "service.name",
                 "groupbyTagEntity": "DESTINATION",
             },
             "tagFilterExpression": {
@@ -167,7 +174,7 @@ def collect_endpoint_metrics(
             errors = sum(v[1] for v in errors_vals if isinstance(v, list) and len(v) > 1) if errors_vals else 0
             latency = latency_vals[-1][1] if latency_vals and isinstance(latency_vals[-1], list) and len(latency_vals[-1]) > 1 else 0.0
             error_rate = round((errors / calls * 100) if calls > 0 else 0.0, 2)
-            endpoint_name = (item.get("tags") or {}).get("endpoint.name", "unknown")
+            endpoint_name = (item.get("tags") or {}).get("service.name", "unknown")
             result.append({
                 "endpoint": endpoint_name,
                 "calls": int(calls),

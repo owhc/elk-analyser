@@ -1,4 +1,4 @@
-# Updated: 2026-09-15 19:58:12 +0800
+# Updated: 2026-09-17 08:54:33 +0800
 """
 analyser/preprocessor.py
 ─────────────────────────
@@ -143,6 +143,7 @@ def preprocess(
     query_to: datetime,
     config=None,
     instana_context: Optional[dict] = None,
+    es_agg_summary: Optional[dict] = None,
 ) -> dict:
     """
     主要預處理函式。
@@ -155,6 +156,9 @@ def preprocess(
         config           AppConfig 實例（或含 field_mapping 的 dict，向後相容）
         instana_context  由 api.py 解析後傳入的 Instana 資料 dict；
                          None 表示純 ELK 模式（向後相容）
+        es_agg_summary   層三精準限縮：Kibana 帶來的 ES 聚合摘要；
+                         非 None 時直接注入 event_sequence 頂層，
+                         供 Bob 在分析前優先參考統計全貌，不需再從原始事件重算
 
     回傳：
         符合 Bob Shell 輸入契約的事件序列字典（含頂層 instana_context）
@@ -217,11 +221,20 @@ def preprocess(
         "instana_context": _build_instana_context(instana_context),
     }
 
+    # 層三精準限縮：將 Kibana 聚合摘要注入頂層
+    # Bob 分析時可直接參考全局統計（error_count_by_service、spike_service 等），
+    # 不需從有限的 event_chains 樣本重新推斷分布。
+    if es_agg_summary:
+        result["es_agg_summary"] = es_agg_summary
+        logger.info("層三精準限縮：注入 es_agg_summary（keys: %s）",
+                    ", ".join(es_agg_summary.keys()))
+
     logger.info(
-        "預處理完成：%d 筆有效事件，分為 %d 個事件鏈（Trace ID: %d，時間窗口: %d）",
+        "預處理完成：%d 筆有效事件，分為 %d 個事件鏈（Trace ID: %d，時間窗口: %d）%s",
         len(events),
         len(event_chains),
         len(trace_groups),
         len(time_groups),
+        f"，含 es_agg_summary" if es_agg_summary else "",
     )
     return result

@@ -1,0 +1,220 @@
+# ES 查詢優化策略計畫
+<!-- Created: 2026-09-17 16:13:55 +0800 -->
+
+## 背景
+
+本文件記錄針對 `analyser/extractor.py` 的 Elasticsearch 查詢優化策略評估結果。
+目標是在資料進入 Python / Bob LLM 之前，盡可能在 ES 層完成過濾與精簡，
+降低網路傳輸量、記憶體峰值與 LLM token 消耗。
+
+---
+
+## 策略評估總覽
+
+| # | 策略 | 有效性 | 現況 | 優先級 |
+|---|------|--------|------|--------|
+| 1 | 欄位精簡投影（Source Filtering） | ✅ 高效益 | **未實作** | P0 |
+| 2 | Aggregations 去重計數 | ✅ 高效益 | 架構存在但不完整 | P1 |
+| 3 | Range + Terms 硬過濾 | ✅ 已完整實作 | — | 維持現狀 |
+| 4 | 鄰近脈絡撈取法（Context Fetching） | ⚠️ 謹慎評估 | trace.id grouping 已覆蓋 | 暫緩 |
+
+---
+
+## 策略 1：欄位精簡與投影（Source Filtering）
+
+### 問題
+
+`extractor._query_elasticsearch()` 目前無 `_source` 參數，ES 回傳完整 `_source`。
+Logstash 吃進來的 banking 文件通常含 40–60 個欄位（K8s 節點、Agent 版本、ECS 元數據等），
+大部分對 AI 分析無用，卻在以下環節佔用資源：
+
+- **網路傳輸**：ES → Python 的 payload
+- **Python 記憶體**：`raw_logs` list 在 `preprocess()` 完成前持有所有原始文件
+- **LLM token**：若未來直接把 raw 欄位傳給 AI
+
+### 解決方案
+
+在 `extractor.py` 的 `query_body` 加入 `_source` 白名單，從 `field_mapping` 動態組裝核心欄位，
+並允許 `config.yaml` 透過 `source_fields.extra` 補充 banking demo 特定欄位。
+
+#### config.yaml 新增區塊
+
+```yaml
+# ── 欄位精簡投影（Source Filtering）────────────────────────────────
+# 控制 ES 查詢時只回傳哪些欄位，減少 payload 與 token 消耗
+source_fields:
+  extra:
+    - "module"           # was-liberty 模組判斷（SystemErr/SystemOut 過濾）
+    - "thread"           # 執行緒名稱（堆疊關聯）
+    - "transaction.id"   # 交易 ID（banking 業務追蹤）
+    - "error.message"    # ECS 標準錯誤欄位
+    - "error.type"       # 例外類型
+```
+
+#### extractor.py 修改點（`_query_elasticsearch` 內）
+
+```python
+# 從 field_mapping 自動取出核心欄位
+core_fields = list(fm.values())  # ["@timestamp", "log.level", "message", ...]
+
+# 加入 config 中的額外欄位
+extra_fields = []
+if hasattr(config, "source_fields"):
+    extra_fields = config.source_fields.get("extra", [])
+elif isinstance(config, dict):
+    extra_fields = config.get("source_fields", {}).get("extra", [])
+
+source_includes = list(dict.fromkeys(core_fields + extra_fields))  # 去重保序
+
+query_body = {
+    "_source": source_includes,
+    "query": {"bool": {"must": must_clauses, "must_not": must_not_clauses}},
+    "sort": [{fm["timestamp"]: "asc"}],
+}
+```
+
+#### 注意事項
+
+- `must_not_clauses` 裡的 `service.keyword`、`module.keyword` 是 filter 欄位，
+  不需放入 `_source`（ES filter 與 `_source` 投影相互獨立）
+- Scroll 後續呼叫 `es.scroll()` 無需重複指定 `_source`，ES 自動沿用原始查詢設定
+- Mock 模式（`_load_mock_logs`）讀本機 JSON，不受此修改影響
+
+#### 效益估算
+
+| | 欄位數 | 單筆大小 | 5000 筆 payload |
+|---|---|---|---|
+| 修改前（全 `_source`） | ~50 | ~2–4 KB | ~10–20 MB |
+| 修改後（白名單 ~10 欄位） | ~10 | ~0.3–0.5 KB | ~1.5–2.5 MB |
+| **節省** | **80%** | **↓ 85%** | **↓ 85%** |
+
+---
+
+## 策略 2：Aggregations 去重計數
+
+### 問題
+
+目前架構中 `es_agg_summary` 由**外部呼叫端傳入**（依賴 Kibana Alert Webhook 帶來聚合數據）。
+當 Web UI 手動觸發時，`es_agg_summary` 為 `None`，AI 只能從有限的 `event_chains` 樣本推斷分布。
+
+系統出錯時同一個錯誤可能刷 5,000+ 條，原始日誌送給 AI 效果遠不如統計摘要。
+
+### 解決方案
+
+在 `extractor._query_elasticsearch()` 的 ES 查詢中**同時帶入 aggregation**，
+讓 `extract()` 的回傳值包含聚合摘要，由 `analysis_pipeline.py` 填入 `es_agg_summary`。
+
+#### ES Query 修改
+
+```python
+query_body = {
+    "_source": source_includes,
+    "query": {"bool": {"must": must_clauses, "must_not": must_not_clauses}},
+    "sort": [{fm["timestamp"]: "asc"}],
+    "aggs": {
+        "error_by_service": {
+            "terms": {"field": "service.keyword", "size": 10}
+        },
+        "error_by_message": {
+            "terms": {"field": "message.keyword", "size": 20}
+        },
+        "errors_over_time": {
+            "date_histogram": {
+                "field": fm["timestamp"],
+                "calendar_interval": "1m"
+            }
+        }
+    }
+}
+```
+
+#### extract() 回傳值調整
+
+目前回傳 `list[dict]`，可改為 tuple 或在 `_query_elasticsearch` 回傳時附帶 agg：
+
+```python
+# 方案：回傳 (logs, agg_summary) tuple，pipeline 端解包
+def _query_elasticsearch(...) -> tuple[list[dict], dict]:
+    ...
+    agg_summary = {}
+    if "aggregations" in resp:
+        agg_summary = {
+            "error_by_service": resp["aggregations"]["error_by_service"]["buckets"],
+            "error_by_message": resp["aggregations"]["error_by_message"]["buckets"],
+            "errors_over_time": resp["aggregations"]["errors_over_time"]["buckets"],
+        }
+    return results, agg_summary
+```
+
+#### 受影響的呼叫鏈
+
+```
+extractor.extract()
+  → analysis_pipeline.run_analysis()  # 解包 agg_summary
+    → preprocessor.preprocess()       # 注入 es_agg_summary（現有介面不變）
+```
+
+#### 效益
+
+「Connection Timeout 發生 5,200 次」這類統計數據讓 AI 立即識別主因，
+比讓 AI 自己從 5,000 條流水帳推算分布效率高出數倍。
+
+---
+
+## 策略 3：Range + Terms 硬過濾（已完整實作）
+
+### 現況（無需修改）
+
+以下過濾機制均已在 `extractor.py` 實作：
+
+| 過濾項目 | 實作位置 |
+|---------|---------|
+| 時間 Range | `extractor.py:106–114` — `range` query |
+| 錯誤等級 Terms | `extractor.py:115–121` — `terms` query（大小寫相容） |
+| Liberty SystemOut/Err 噪音排除 | `extractor.py:143–167` — `must_not` |
+| 最大筆數上限 | `extractor.py:175` — `max_hits: 5000` |
+| 層二服務限縮 | `extractor.py:124–126` — `spike_service` terms filter |
+
+---
+
+## 策略 4：鄰近脈絡撈取法（暫緩）
+
+### 評估結論
+
+兩步撈取法（第一步找 ERROR + trace.id → 第二步撈鄰近 INFO）有以下架構風險：
+
+1. **兩次 ES round-trip**：Scroll API 成本加倍
+2. **INFO 日誌不在 filter.levels 白名單**：`config.yaml` 只允許 ERROR / FATAL / CRITICAL
+3. **INFO 日誌量巨大**：banking demo 每秒數十條，前後 10 秒可能數百筆，反而增加噪音
+
+### 現有替代方案
+
+`preprocessor._group_by_trace_id()` 已把同一 `trace.id` 的所有事件集中在同一 chain，
+提供等效的因果脈絡。若 `trace.id` 未填充，5 分鐘時間窗口 fallback 亦覆蓋前後事件。
+
+### 真正值得做的改善
+
+提升 Logstash pipeline 對 `trace.id` 的填充率（目前 banking demo 的 MDB / PostgreSQL 日誌
+未必帶 trace.id），使 trace-based grouping 的覆蓋率從約 40% 提升至 80%+，
+效益遠高於新增兩步撈取邏輯。
+
+---
+
+## 實作順序建議
+
+```
+P0（立即）: 策略 1 — extractor.py 加 _source 白名單 + config.yaml 新增 source_fields
+P1（次週）: 策略 2 — extractor._query_elasticsearch() 加 aggs，extract() 回傳 tuple
+暫緩:       策略 4 — 優先改善 Logstash trace.id 填充率，再評估是否需要兩步撈
+```
+
+---
+
+## 相關檔案
+
+| 檔案 | 說明 |
+|------|------|
+| [`bob-analyser/analyser/extractor.py`](../bob-analyser/analyser/extractor.py) | 主要修改目標（策略 1、2） |
+| [`bob-analyser/analyser/preprocessor.py`](../bob-analyser/analyser/preprocessor.py) | `es_agg_summary` 注入（介面不變） |
+| [`bob-analyser/analysis_pipeline.py`](../bob-analyser/analysis_pipeline.py) | `run_analysis()` 解包 agg_summary |
+| [`bob-analyser/config/config.yaml`](../bob-analyser/config/config.yaml) | 新增 `source_fields` 區塊 |
