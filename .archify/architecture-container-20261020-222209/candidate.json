@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "ELK Analyser — Container 架構",
+    "subtitle": "Podman Compose 部署拓撲：10 個容器、2 個橋接網路、7 個 Volume",
+    "output": "docs/arch-diagram/container-architecture.html",
+    "locale": "zh-TW",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "web",          "type": "frontend",  "label": "elk-analyser-web", "sublabel": "Nginx :3001",                    "pos": [40,  280], "size": [160, 56], "tag": "/grafana/ /web/ /api/" },
+    { "id": "grafana",      "type": "frontend",  "label": "grafana",          "sublabel": "Grafana 11.2 :3000",             "pos": [40,  400], "size": [160, 56], "tag": "Infinity datasource" },
+    { "id": "analyser",     "type": "backend",   "label": "elk-analyser",     "sublabel": "FastAPI :8080 + Bob CLI",        "pos": [280, 280], "size": [160, 56], "tag": "analysis_pipeline" },
+    { "id": "instana_agent","type": "security",  "label": "instana-agent",    "sublabel": "agent :42699",                   "pos": [520,  80], "size": [160, 56], "tag": "japp-demo-local" },
+    { "id": "banking_app",  "type": "backend",   "label": "banking-app",      "sublabel": "WAS Liberty :9080 + Artemis :5672","pos": [520, 280], "size": [160, 72], "tag": "bankingQueue AMQP" },
+    { "id": "banking_db",   "type": "database",  "label": "banking-db",       "sublabel": "PostgreSQL 16 :5432 / bankdb",   "pos": [520, 420], "size": [160, 56] },
+    { "id": "es",           "type": "database",  "label": "japp-elasticsearch","sublabel": "ES 8.x :9200",                  "pos": [760, 160], "size": [160, 56] },
+    { "id": "logstash",     "type": "backend",   "label": "japp-logstash",    "sublabel": "Logstash :5044",                 "pos": [760, 320], "size": [160, 56] },
+    { "id": "kibana",       "type": "frontend",  "label": "japp-kibana",      "sublabel": "Kibana :5601",                   "pos": [760, 480], "size": [160, 56] },
+    { "id": "instana_saas", "type": "cloud",     "label": "Instana SaaS",     "sublabel": "ingress-orange-saas :443",       "pos": [1000, 80], "size": [160, 56], "tag": "apiToken" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "elk-analyser-network 10.89.1.0/24", "wraps": ["web", "grafana", "analyser"] },
+    { "kind": "region", "label": "japp-network 10.89.2.0/24", "wraps": ["instana_agent", "banking_app", "banking_db", "es", "logstash", "kibana", "analyser"] }
+  ],
+  "connections": [
+    { "id": "web-analyser",     "from": "web",          "to": "analyser",     "label": "/api/ proxy",       "variant": "emphasis" },
+    { "id": "web-grafana",      "from": "web",          "to": "grafana",      "label": "/grafana/ proxy",   "fromSide": "bottom", "toSide": "top" },
+    { "id": "analyser-es",      "from": "analyser",     "to": "es",           "label": "ES scroll",         "variant": "emphasis" },
+    { "id": "analyser-instana", "from": "analyser",     "to": "instana_saas", "label": "REST collect()",    "variant": "security", "fromSide": "top" },
+    { "id": "agent-instana",    "from": "instana_agent","to": "instana_saas", "label": "agent telemetry",   "variant": "security" },
+    { "id": "app-artemis-db",   "from": "banking_app",  "to": "banking_db",   "label": "MDB → JDBC :5432",  "variant": "default" },
+    { "id": "app-logstash",     "from": "banking_app",  "to": "logstash",     "label": "app_logs vol",      "variant": "dashed" },
+    { "id": "db-logstash",      "from": "banking_db",   "to": "logstash",     "label": "pg logs vol",       "variant": "dashed" },
+    { "id": "logstash-es",      "from": "logstash",     "to": "es",           "label": "indexed docs",      "variant": "emphasis", "fromSide": "top", "toSide": "bottom" },
+    { "id": "kibana-es",        "from": "kibana",       "to": "es",           "label": "ES HTTP",           "fromSide": "right",   "toSide": "right" },
+    { "id": "kibana-analyser",  "from": "kibana",       "to": "analyser",     "label": "Alert Webhook",     "variant": "security" },
+    { "id": "grafana-analyser", "from": "grafana",      "to": "analyser",     "label": "Webhook POST",      "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan",    "title": "網路分割", "items": ["elk-analyser-network (10.89.1.0/24)：web ↔ elk-analyser ↔ grafana", "japp-network (10.89.2.0/24)：elk-analyser (10.89.2.50) + banking + ES + Logstash + Kibana + Instana Agent (10.89.2.5)", "Instana SaaS 是外部 SaaS（不在任何 Podman 網路內）"] },
+    { "dot": "emerald", "title": "banking-app 內嵌組件", "items": ["WAS Liberty :9080 / :9443（HTTP/HTTPS）", "ActiveMQ Artemis Broker :5672 AMQP / :8161 mgmt UI", "bankingQueue：Spring MDB 消費，JDBC 寫入 PostgreSQL (bankdb)", "Instana JMX sensor 回連 instana-agent :42699"] },
+    { "dot": "violet",  "title": "elk-analyser 內嵌組件 & Volume", "items": ["Bob CLI 安裝於容器內，subprocess 呼叫 bob run --mode log-analyst", "bob_workspace:/workspace（@file 事件序列）、elk_reports:/reports（PPTX）、elk_db:/db（SQLite）", "app_logs（共享）：banking-app + banking-db 寫入，Logstash 讀取"] }
+  ]
+}

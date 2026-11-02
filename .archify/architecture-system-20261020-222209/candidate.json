@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "ELK Analyser — 系統架構",
+    "subtitle": "FastAPI 日誌分析平台 · Bob AI 根因診斷 · Instana 遙測整合",
+    "output": "docs/arch-diagram/system-architecture.html",
+    "locale": "zh-TW",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "user", "type": "external", "label": "使用者", "sublabel": "瀏覽器", "pos": [40, 300], "size": [110, 56] },
+    { "id": "grafana_alert", "type": "external", "label": "Grafana / Kibana", "sublabel": "Alert Webhook 觸發", "pos": [40, 430], "size": [140, 56] },
+    { "id": "nginx", "type": "frontend", "label": "Nginx Gateway", "sublabel": "elk-analyser-web :3001", "pos": [220, 300], "size": [140, 56] },
+    { "id": "webui", "type": "frontend", "label": "Web UI", "sublabel": "靜態頁面", "pos": [220, 180], "size": [140, 56] },
+    { "id": "grafana", "type": "frontend", "label": "Grafana", "sublabel": "grafana:11.2 :3000", "pos": [220, 420], "size": [140, 56] },
+    { "id": "api", "type": "backend", "label": "FastAPI", "sublabel": "elk-analyser :8080", "pos": [440, 300], "size": [140, 56], "tag": "analysis_pipeline" },
+    { "id": "queue", "type": "messagebus", "label": "Job Queue", "sublabel": "threading.Queue", "pos": [440, 180], "size": [140, 56] },
+    { "id": "worker", "type": "backend", "label": "Queue Worker", "sublabel": "daemon thread", "pos": [620, 300], "size": [140, 56] },
+    { "id": "pipeline", "type": "backend", "label": "run_analysis()", "sublabel": "analysis_pipeline.py", "pos": [800, 300], "size": [150, 56], "tag": "4 stages" },
+    { "id": "bob_cli", "type": "external", "label": "Bob CLI", "sublabel": "log-analyst mode", "pos": [800, 160], "size": [140, 56], "tag": "max-turns 5" },
+    { "id": "sqlite", "type": "database", "label": "SQLite DB", "sublabel": "/db/history.db", "pos": [800, 430], "size": [140, 56] },
+    { "id": "reports", "type": "database", "label": "PPTX 報告", "sublabel": "/reports/", "pos": [800, 530], "size": [140, 56] },
+    { "id": "workspace", "type": "database", "label": "Workspace", "sublabel": "/workspace/logs/", "pos": [620, 160], "size": [140, 48] },
+    { "id": "instana_collector", "type": "security", "label": "Instana Collector", "sublabel": "instana_collector.py", "pos": [1040, 300], "size": [150, 56], "tag": "REST API" },
+    { "id": "instana_saas", "type": "cloud", "label": "Instana SaaS", "sublabel": "ingress-orange-saas", "pos": [1240, 260], "size": [150, 56] },
+    { "id": "es", "type": "database", "label": "Elasticsearch", "sublabel": "japp-elasticsearch :9200", "pos": [1040, 430], "size": [150, 56] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "elk-analyser-network (10.89.1.0/24)", "wraps": ["nginx", "webui", "grafana"] },
+    { "kind": "region", "label": "japp-network (10.89.2.0/24)", "wraps": ["api", "queue", "worker", "pipeline", "bob_cli", "sqlite", "reports", "workspace", "instana_collector", "es"] }
+  ],
+  "connections": [
+    { "id": "user-nginx", "from": "user", "to": "nginx", "label": "HTTPS :3001", "variant": "emphasis" },
+    { "id": "alert-grafana", "from": "grafana_alert", "to": "nginx", "label": "POST /api/analyse", "variant": "dashed", "fromSide": "right", "toSide": "bottom" },
+    { "id": "nginx-webui", "from": "nginx", "to": "webui", "label": "/web/", "fromSide": "top", "toSide": "bottom" },
+    { "id": "nginx-grafana", "from": "nginx", "to": "grafana", "label": "/grafana/", "fromSide": "bottom", "toSide": "top" },
+    { "id": "nginx-api", "from": "nginx", "to": "api", "label": "/api/", "variant": "emphasis" },
+    { "id": "api-queue", "from": "api", "to": "queue", "label": "enqueue job", "fromSide": "top", "toSide": "bottom" },
+    { "id": "queue-worker", "from": "queue", "to": "worker", "label": "dequeue", "fromSide": "right", "toSide": "top" },
+    { "id": "api-sqlite-read", "from": "api", "to": "sqlite", "label": "GET jobs", "variant": "dashed", "fromSide": "bottom", "toSide": "left" },
+    { "id": "worker-pipeline", "from": "worker", "to": "pipeline", "label": "run_analysis()", "variant": "emphasis" },
+    { "id": "pipeline-bob", "from": "pipeline", "to": "bob_cli", "label": "@job-{id}.json", "variant": "emphasis", "fromSide": "top", "toSide": "bottom" },
+    { "id": "pipeline-es", "from": "pipeline", "to": "es", "label": "ES scroll query", "fromSide": "right", "toSide": "top" },
+    { "id": "pipeline-instana", "from": "pipeline", "to": "instana_collector", "label": "collect()", "variant": "dashed", "fromSide": "right", "toSide": "left" },
+    { "id": "instana-saas", "from": "instana_collector", "to": "instana_saas", "label": "REST API / apiToken", "variant": "security", "fromSide": "top", "toSide": "bottom" },
+    { "id": "pipeline-sqlite", "from": "pipeline", "to": "sqlite", "label": "complete_job()", "fromSide": "bottom", "toSide": "top" },
+    { "id": "pipeline-reports", "from": "pipeline", "to": "reports", "label": "PPTX write", "variant": "dashed", "fromSide": "right", "toSide": "right" },
+    { "id": "bob-workspace", "from": "bob_cli", "to": "workspace", "label": "read @file", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "觸發方式", "items": ["Web UI / Kibana Alert / CLI 均透過 POST /analyse 觸發", "Grafana Datalink 透過 GET /analyse/trigger 觸發", "所有請求進入 Job Queue 序列執行，避免並發衝突"] },
+    { "dot": "emerald", "title": "分析核心", "items": ["四段 Pipeline：extract → preprocess → bob_bridge → report_builder", "Bob CLI 以 log-analyst mode 執行根因分析（max-turns 5）", "事件序列寫入 /workspace/logs/ 再以 @file 引用"] },
+    { "dot": "violet", "title": "Instana 整合", "items": ["trigger 含 _instana 時呼叫 instana_collector.collect()", "收集 Events / Endpoint Metrics / Trace Summary / JVM infra", "失敗時自動降級為純 ELK 模式"] }
+  ]
+}

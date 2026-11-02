@@ -39,18 +39,18 @@ com.instana.plugin.activemqartemis:
 
 # ─── PostgreSQL 監控 ──────────────────────────────────────────────
 # Instana postgresql sensor 透過 pg_stat_* 系統 view 收集指標
-# 需確保 db2inst1 已持有 pg_monitor role（見 README 步驟七）
+# 需確保 bankuser 已持有 pg_monitor role（見 README 步驟七）
 com.instana.plugin.postgresql:
   enabled: true
   remote: true
   host: 10.89.2.10   # banking-db 固定 IP
   port: 5432
-  username: db2inst1
-  password: db2admin123
+  username: bankuser
+  password: bankpassword
   databases:
     - name: bankdb
-      username: db2inst1
-      password: db2admin123
+      username: bankuser
+      password: bankpassword
 
 # ─── Docker / Podman 感知 ───────────────────────────────────────
 # macOS 上 Podman socket 無法從容器內存取，停用避免持續報錯

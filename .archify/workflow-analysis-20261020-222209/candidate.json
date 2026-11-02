@@ -1,0 +1,66 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "ELK Analyser — 分析流程",
+    "subtitle": "從觸發到 PPTX 報告的完整執行路徑",
+    "output": "docs/arch-diagram/analysis-workflow.html",
+    "locale": "zh-TW",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    { "id": "trigger", "label": "觸發層" },
+    { "id": "api_layer", "label": "API 層" },
+    { "id": "pipeline_layer", "label": "Pipeline 層" },
+    { "id": "ai_layer", "label": "AI 分析層" },
+    { "id": "storage", "label": "儲存層", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "intake",    "label": "接收",     "fromCol": 0, "toCol": 0 },
+    { "id": "queue",     "label": "排隊執行",  "fromCol": 1, "toCol": 1, "variant": "emphasis" },
+    { "id": "extract",   "label": "提取與預處理", "fromCol": 2, "toCol": 3 },
+    { "id": "ai_phase",  "label": "AI 根因分析", "fromCol": 4, "toCol": 4, "variant": "emphasis" },
+    { "id": "report",    "label": "報告",     "fromCol": 5, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["trigger_in", "dedup_check", "enqueue", "dequeue", "extract_logs", "preprocess", "bob_analyse", "parse_output", "build_report", "done"],
+  "nodes": [
+    { "id": "trigger_in",   "lane": "trigger",        "col": 0, "type": "external", "label": "觸發請求",     "sublabel": "Web UI / Kibana / CLI" },
+    { "id": "dedup_check",  "lane": "api_layer",      "col": 0, "type": "security", "label": "去重檢查",     "sublabel": "5 分鐘內同視窗跳過" },
+    { "id": "create_job",   "lane": "storage",        "col": 0, "type": "database", "label": "建立 Job 記錄", "sublabel": "status=running" },
+    { "id": "enqueue",      "lane": "api_layer",      "col": 1, "type": "messagebus","label": "Job Queue",   "sublabel": "threading.Queue (5 階段視窗)" },
+    { "id": "dequeue",      "lane": "pipeline_layer", "col": 1, "type": "backend",  "label": "Worker 取出",  "sublabel": "daemon thread" },
+    { "id": "resolve_instana","lane": "api_layer",    "col": 2, "type": "security", "label": "Instana Context", "sublabel": "trigger 含 _instana?" },
+    { "id": "extract_logs", "lane": "pipeline_layer", "col": 2, "type": "backend",  "label": "extractor",   "sublabel": "ES scroll query" },
+    { "id": "es_query",     "lane": "storage",        "col": 2, "type": "database", "label": "Elasticsearch","sublabel": "index_pattern scroll" },
+    { "id": "instana_api",  "lane": "ai_layer",       "col": 3, "type": "cloud",    "label": "Instana SaaS", "sublabel": "Events / Metrics / Traces" },
+    { "id": "preprocess",   "lane": "pipeline_layer", "col": 3, "type": "backend",  "label": "preprocessor", "sublabel": "trace_id 分組 / 時間窗口" },
+    { "id": "write_seq",    "lane": "storage",        "col": 3, "type": "database", "label": "寫事件序列 JSON","sublabel": "/workspace/logs/" },
+    { "id": "bob_analyse",  "lane": "ai_layer",       "col": 4, "type": "backend",  "label": "Bob CLI",      "sublabel": "log-analyst mode", "tag": "max-turns 5" },
+    { "id": "parse_output", "lane": "pipeline_layer", "col": 4, "type": "backend",  "label": "解析 Bob 輸出", "sublabel": "strip fences → JSON" },
+    { "id": "build_report", "lane": "pipeline_layer", "col": 5, "type": "backend",  "label": "report_builder","sublabel": "PPTX 生成" },
+    { "id": "done",         "lane": "trigger",        "col": 5, "type": "frontend", "label": "完成",         "sublabel": "回傳 job_id + report URL" },
+    { "id": "fail_job",     "lane": "storage",        "col": 5, "type": "security", "label": "fail_job()",   "sublabel": "status=failed（不寫 Checkpoint）" }
+  ],
+  "edges": [
+    { "id": "in-dedup",          "from": "trigger_in",     "to": "dedup_check",    "label": "POST /analyse",    "variant": "emphasis" },
+    { "id": "dedup-create",      "from": "dedup_check",    "to": "create_job",     "label": "新請求",           "variant": "dashed",  "role": "branch" },
+    { "id": "dedup-enqueue",     "from": "dedup_check",    "to": "enqueue",        "label": "入隊",             "variant": "emphasis" },
+    { "id": "enqueue-dequeue",   "from": "enqueue",        "to": "dequeue",        "label": "worker 取出",      "variant": "emphasis" },
+    { "id": "dequeue-resolve-instana", "from": "dequeue", "to": "resolve_instana", "label": "Instana 觸發?",    "variant": "dashed",  "role": "branch" },
+    { "id": "resolve-instana-api",     "from": "resolve_instana","to": "instana_api","label": "collect()",      "variant": "security","role": "branch" },
+    { "id": "dequeue-extract",   "from": "dequeue",        "to": "extract_logs",   "label": "extract()",       "variant": "emphasis" },
+    { "id": "extract-es",        "from": "extract_logs",   "to": "es_query",       "label": "scroll API",      "variant": "dashed",  "role": "branch" },
+    { "id": "extract-preprocess","from": "extract_logs",   "to": "preprocess",     "label": "raw_logs",        "variant": "emphasis" },
+    { "id": "preprocess-write",  "from": "preprocess",     "to": "write_seq",      "label": "event_sequence",  "variant": "dashed",  "role": "branch" },
+    { "id": "preprocess-bob",    "from": "preprocess",     "to": "bob_analyse",    "label": "@job-{id}.json",  "variant": "emphasis", "role": "branch" },
+    { "id": "bob-parse",         "from": "bob_analyse",    "to": "parse_output",   "label": "last_message",    "variant": "emphasis", "role": "return" },
+    { "id": "parse-report",      "from": "parse_output",   "to": "build_report",   "label": "analysis dict",   "variant": "emphasis" },
+    { "id": "report-done",       "from": "build_report",   "to": "done",           "label": "report_path",     "variant": "emphasis" },
+    { "id": "report-fail",       "from": "build_report",   "to": "fail_job",       "label": "exception",       "variant": "dashed",   "role": "error" }
+  ],
+  "cards": [
+    { "dot": "cyan",    "title": "時間視窗優先序", "items": ["1. from_time → 2. event_time → 3. lookback_minutes", "4. Checkpoint (只在 completed 更新) → 5. now − default_lookback"] },
+    { "dot": "emerald", "title": "Pipeline 四段", "items": ["extract: ES scroll + spike_service 過濾", "preprocess: trace_id 分組 → 時間窗口分組", "bob_bridge: Bob CLI @file → parse last_message", "report_builder: PPTX write → SQLite complete_job"] },
+    { "dot": "violet",  "title": "Instana 精準限縮三層", "items": ["Layer 1: event_time 中心視窗 ±5/2 分", "Layer 2: spike_service ES terms filter", "Layer 3: es_agg_summary 注入 event_sequence 頂層"] }
+  ]
+}

@@ -23,9 +23,9 @@ datasources:
     type: postgres
     access: proxy
     url: banking-db:5432
-    user: db2inst1
+    user: bankuser
     secureJsonData:
-      password: "db2admin123"
+      password: "bankpassword"
     jsonData:
       database: "bankdb"
       sslmode: "disable"

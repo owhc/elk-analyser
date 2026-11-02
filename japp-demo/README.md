@@ -109,8 +109,8 @@ export ARTEMIS_PASS=your-mq-password
 | `ARTEMIS_MGMT_PORT` | `8161` | Artemis 管理端口 |
 | `DB_PORT` | `50000` | PostgreSQL 主機端口（映射至 5432） |
 | `DB_NAME` | `bankdb` | 資料庫名稱 |
-| `DB_USER` | `db2inst1` | 資料庫使用者 |
-| `DB_PASS` | `db2admin123` | 資料庫密碼 |
+| `DB_USER` | `bankuser` | 資料庫使用者 |
+| `DB_PASS` | `bankpassword` | 資料庫密碼 |
 | `ARTEMIS_USER` | `admin` | Artemis 使用者 |
 | `ARTEMIS_PASS` | `admin123` | Artemis 密碼 |
 | `ES_JAVA_OPTS` | `-Xms256m -Xmx512m` | Elasticsearch JVM 堆大小 |

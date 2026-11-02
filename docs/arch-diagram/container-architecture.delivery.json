@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "30645d2a-631f-4120-aeae-3d288f263a1c",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/ochen/dev/elk-analyser/.archify/architecture-container-20261020-222209/candidate.json",
+  "output": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/container-architecture.html",
+  "specification": {
+    "sha256": "19c946e694f495bba4328cdfd0632021fa5797e2c54f54c88cba4f1a4b74fd04",
+    "bytes": 5155
+  },
+  "artifact": {
+    "sha256": "edef7ec6c9e0038a71cf47a3e975527bc0bd0575c503be71bb66ec2d6e87ab97",
+    "bytes": 833008
+  }
+}

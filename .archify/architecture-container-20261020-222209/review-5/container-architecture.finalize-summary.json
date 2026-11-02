@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/ochen/dev/elk-analyser/.archify/architecture-container-20261020-222209/candidate.json",
+    "sha256": "e989be8624fe77ed6b90f5275b91d39d42af6cf7e359be724ff940c847bca039",
+    "bytes": 5155
+  },
+  "artifact": {
+    "path": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/container-architecture.html",
+    "sha256": "1890bcff6f2ecc9f169de76b1f995522e9499a1748e75b265877ec48d4eea3f6",
+    "bytes": 832866
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/ochen/dev/elk-analyser/.archify/architecture-container-20261020-222209/review-5/container-architecture.finalize.json",
+    "summaryReceipt": "/Users/ochen/dev/elk-analyser/.archify/architecture-container-20261020-222209/review-5/container-architecture.finalize-summary.json",
+    "browserCheckReceipt": "/Users/ochen/dev/elk-analyser/.archify/architecture-container-20261020-222209/review-5/container-architecture.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-20T13:41:55.365Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2640,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  },
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "routesOverSuggestedBends": 1
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [],
+      "detours": [
+        {
+          "relationship": {
+            "id": "analyser-instana",
+            "from": "analyser",
+            "to": "instana_saas",
+            "label": "REST collect()",
+            "collectionIndex": 3,
+            "artifactIndex": 4
+          },
+          "bends": 3,
+          "stretch": 1
+        }
+      ],
+      "truncated": false
+    },
+    "hints": [
+      "analyser has 3 relationships facing its right side, which fits 2 ports: make that side at least 60px, or move some of those neighbours so they face another side of analyser.",
+      "analyser → instana_saas needs 3 bends: move node analyser or instana_saas so they share a row or column with matching centers, or sit diagonally with a clear corner."
+    ],
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}

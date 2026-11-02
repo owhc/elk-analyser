@@ -8,7 +8,7 @@
 # Options:
 #   -b <金額>   每個帳號的重置金額（預設 150000）
 #   -c <容器>   PostgreSQL 容器名稱（預設 banking-db）
-#   -u <用戶>   DB 用戶（預設 db2inst1）
+#   -u <用戶>   DB 用戶（預設 bankuser）
 #   -d <DB>     資料庫名稱（預設 bankdb）
 #   --show      只顯示目前餘額，不重置
 #   -h          顯示說明
@@ -23,7 +23,7 @@ PODMAN=$(command -v podman 2>/dev/null \
 
 BALANCE=150000
 CONTAINER="banking-db"
-DB_USER="db2inst1"
+DB_USER="bankuser"
 DB_NAME="bankdb"
 SHOW_ONLY=false
 

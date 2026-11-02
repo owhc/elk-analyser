@@ -1,0 +1,34 @@
+{
+  "_updated": "2026-09-18 10:59:28 +0800",
+  "mcpServers": {
+    "instana": {
+      "command": "uvx",
+      "args": [
+        "mcp-instana",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "INSTANA_BASE_URL": "https://ibmdevsandbox-instanaibm.instana.io/",
+        "INSTANA_API_TOKEN": "${INSTANA_API_TOKEN}"
+      },
+      "envFile": "../bob-analyser/.env"
+    },
+    "bob-marketplace": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:54815/mcp",
+      "headers": {
+        "Bob-Marketplace-Token": "bob-marketplace-local"
+      },
+      "disabled": false,
+      "alwaysAllow": [
+        "search_assets",
+        "get_asset",
+        "list_installed",
+        "list_favorites",
+        "suggest_assets",
+        "list_updates"
+      ]
+    }
+  }
+}

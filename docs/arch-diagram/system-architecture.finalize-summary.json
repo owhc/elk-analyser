@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/ochen/dev/elk-analyser/.archify/architecture-system-20261020-222209/candidate.json",
+    "sha256": "28bc84c5e5c07e7960d3aa8bb9830cb25fb3b3463d711d4a3488ce40e132b61b",
+    "bytes": 5917
+  },
+  "artifact": {
+    "path": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/system-architecture.html",
+    "sha256": "3ed3b61c4b251feb9a522b675a2b5ca98d9371b118ff908d3f6a2c8a028ee7c0",
+    "bytes": 844858
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/system-architecture.finalize.json",
+    "summaryReceipt": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/system-architecture.finalize-summary.json",
+    "browserCheckReceipt": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/system-architecture.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-20T13:41:55.365Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2516,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  },
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "resolvedCrossovers": 1,
+      "routesOverSuggestedBends": 3,
+      "routesOverSuggestedStretch": 1
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [
+        {
+          "left": {
+            "id": "api-sqlite-read",
+            "from": "api",
+            "to": "sqlite",
+            "label": "GET jobs",
+            "collectionIndex": 7,
+            "artifactIndex": 8
+          },
+          "right": {
+            "id": "pipeline-reports",
+            "from": "pipeline",
+            "to": "reports",
+            "label": "PPTX write",
+            "collectionIndex": 14,
+            "artifactIndex": 15
+          },
+          "point": [
+            797,
+            406
+          ]
+        }
+      ],
+      "detours": [
+        {
+          "relationship": {
+            "id": "alert-grafana",
+            "from": "grafana_alert",
+            "to": "nginx",
+            "label": "POST /api/analyse",
+            "collectionIndex": 1,
+            "artifactIndex": 2
+          },
+          "bends": 3,
+          "stretch": 1
+        },
+        {
+          "relationship": {
+            "id": "pipeline-es",
+            "from": "pipeline",
+            "to": "es",
+            "label": "ES scroll query",
+            "collectionIndex": 10,
+            "artifactIndex": 11
+          },
+          "bends": 3,
+          "stretch": 1
+        },
+        {
+          "relationship": {
+            "id": "pipeline-reports",
+            "from": "pipeline",
+            "to": "reports",
+            "label": "PPTX write",
+            "collectionIndex": 14,
+            "artifactIndex": 15
+          },
+          "bends": 4,
+          "stretch": 1.807
+        }
+      ],
+      "truncated": false
+    },
+    "hints": [
+      "api → sqlite crosses pipeline → reports: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "grafana_alert → nginx needs 3 bends: move node grafana_alert or nginx so they share a row or column with matching centers, or sit diagonally with a clear corner.",
+      "pipeline → es needs 3 bends: move node pipeline or es so they share a row or column with matching centers, or sit diagonally with a clear corner.",
+      "pipeline → reports needs 4 bends: move node pipeline or reports so they share a row or column with matching centers, or sit diagonally with a clear corner."
+    ],
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}

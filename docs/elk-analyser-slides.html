@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="created" content="2026-10-27 10:33:50 +0800">
+<meta name="updated" content="2026-10-27 11:45:00 +0800">
+<title>ELK Analyser — AI-Driven Log Diagnostics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,200;0,400;0,700;1,200&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   ELK Analyser slides — Style 5 Minimalist Monochrome
+   Single file · hand-written CSS/JS · ← → to navigate
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); }
+
+:root {
+  --bg: #f9f9f8; --ink: #111110; --mid: #555552; --faint: #c8c8c4; --rule: #e2e2de;
+  --sans: 'DM Sans', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
+  --mono: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* type scale: follows the smaller of width / height so nothing overflows */
+  --t-h2:    clamp(1.5rem, min(3.6vw, 6.6vh), 3.6rem);
+  --t-h3:    clamp(1rem,   min(1.7vw, 3.2vh), 1.7rem);
+  --t-body:  clamp(0.8rem, min(1.2vw, 2.25vh), 1.15rem);
+  --t-small: clamp(0.62rem, min(0.85vw, 1.7vh), 0.85rem);
+  --pad-x:   clamp(1.2rem, 4vw, 5rem);
+  --gap:     clamp(0.7rem, 2.2vh, 2rem);
+}
+
+/* ---------- slide shell ---------- */
+.slide {
+  display: none; width: 100vw; height: 100vh; height: 100dvh; overflow: hidden;
+  flex-direction: column; position: relative;
+  background: var(--bg); color: var(--ink); font-family: var(--sans);
+}
+.slide.active { display: flex; }
+.slide.dark { --bg: #111110; --ink: #f9f9f8; --mid: #a8a8a4; --faint: #55554f; --rule: #2e2e2b; }
+
+.accent-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--ink); }
+
+.strip-top {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: clamp(0.7rem, 2vh, 2rem) var(--pad-x); border-bottom: 1px solid var(--rule);
+}
+.stamp, .nav-item, .count, .kicker, .lab {
+  font-family: var(--mono); font-size: clamp(0.55rem, 0.72vw, 0.66rem);
+  letter-spacing: 0.14em; text-transform: uppercase;
+}
+.stamp { color: var(--mid); }
+.stamp.right { color: var(--ink); }
+
+.strip-main { flex: 1; min-height: 0; display: grid; grid-template-columns: 2.8fr 1fr; overflow: hidden; }
+.slide.wide .strip-main { grid-template-columns: 1fr clamp(3.5rem, 7vw, 7rem); }
+
+.hero {
+  min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: var(--gap);
+  padding: clamp(0.9rem, 3.2vh, 3.5rem) var(--pad-x); border-right: 1px solid var(--rule);
+}
+.cover .hero { justify-content: space-between; }
+
+.index-col {
+  display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end;
+  padding: clamp(1rem, 3vh, 3.5rem) clamp(0.8rem, 2.4vw, 3rem);
+}
+.slide-number {
+  font-family: var(--mono); font-size: clamp(3rem, min(9vw, 16vh), 10rem);
+  color: var(--rule); line-height: 1; user-select: none;
+}
+.slide.wide .slide-number { font-size: clamp(1.8rem, 4vw, 4rem); }
+.vert-text {
+  writing-mode: vertical-rl; transform: rotate(180deg); color: var(--mid);
+  font-family: var(--mono); font-size: clamp(0.55rem, 0.7vw, 0.62rem);
+  letter-spacing: 0.18em; text-transform: uppercase; white-space: nowrap;
+}
+
+.strip-bottom {
+  flex: 0 0 auto; display: flex; align-items: center; gap: clamp(0.5rem, 1.2vw, 1.6rem);
+  padding: clamp(0.6rem, 1.8vh, 1.6rem) var(--pad-x); border-top: 1px solid var(--rule); overflow: hidden;
+}
+.nav-item { white-space: nowrap; }
+.nav-item.active { color: var(--ink); }
+.nav-item.dim { color: var(--faint); }
+.nav-sep { color: var(--faint); font-family: var(--mono); }
+.count { margin-left: auto; color: var(--mid); white-space: nowrap; }
+.strip-bottom::after { content: ''; flex: 0 0 clamp(9rem, 14vw, 13rem); } /* reserve room for #hud */
+
+/* ---------- HUD: page index + fullscreen (always visible, every slide) ---------- */
+#hud {
+  position: fixed; right: clamp(0.6rem, 1.4vw, 1.4rem); bottom: clamp(0.5rem, 1.2vh, 1rem); z-index: 40;
+  display: flex; align-items: stretch; border: 1px solid #111110; background: #f9f9f8; color: #111110;
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; user-select: none;
+}
+#hud.dark { border-color: #f9f9f8; background: #111110; color: #f9f9f8; }
+#hud .pg { padding: 0.45em 0.8em; white-space: nowrap; display: flex; align-items: center; gap: 0.4em; cursor: pointer; }
+#hud select { font: inherit; letter-spacing: inherit; text-transform: none; color: inherit; background: transparent;
+  border: 0; border-bottom: 1px dashed currentColor; padding: 0 0.2em; outline: 0; cursor: pointer; max-width: 16em; }
+#hud select:focus { border-bottom-style: solid; }
+#hud select option { color: #111110; background: #f9f9f8; }
+#hud button {
+  font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; background: transparent;
+  border: 0; border-left: 1px solid currentColor; padding: 0.45em 0.8em; cursor: pointer; display: flex; align-items: center;
+}
+#hud button:hover { background: #111110; color: #f9f9f8; }
+#hud.dark button:hover { background: #f9f9f8; color: #111110; }
+#hud svg { width: 1.2em; height: 1.2em; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: square; }
+
+/* ---------- type ---------- */
+.kicker { color: var(--mid); }
+.title { font-size: var(--t-h2); font-weight: 200; line-height: 1.04; letter-spacing: -0.03em; }
+.title strong { font-weight: 700; }
+.title em { font-style: italic; color: var(--mid); }
+.lead { font-size: var(--t-body); color: var(--mid); line-height: 1.6; max-width: 48em; }
+.lead b, .card p b { color: var(--ink); font-weight: 700; }
+.note { font-family: var(--mono); font-size: var(--t-small); color: var(--mid); letter-spacing: 0.04em; line-height: 1.6; }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--rule); padding: 0.05em 0.35em; }
+a { color: var(--ink); text-underline-offset: 0.2em; }
+
+.cover .title-giant {
+  font-size: clamp(3rem, min(11vw, 17vh), 13rem); font-weight: 200;
+  line-height: 0.9; letter-spacing: -0.04em;
+}
+.title-giant strong { font-weight: 700; display: block; }
+.title-giant em { display: block; font-style: italic; font-weight: 200; color: var(--mid);
+  font-size: 0.26em; letter-spacing: -0.01em; margin-top: 0.7em; }
+.tagline-row { display: flex; gap: clamp(1.2rem, 3vw, 3rem); flex-wrap: wrap; }
+.tagline-item { display: flex; flex-direction: column; gap: 0.3em; }
+.tagline-key { font-family: var(--mono); font-size: clamp(0.55rem, 0.7vw, 0.63rem);
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--mid); }
+.tagline-val { font-size: clamp(0.78rem, 1.1vw, 0.95rem); }
+
+/* ---------- components ---------- */
+.timeline { border-top: 1px solid var(--ink); }
+.tl-row { display: grid; grid-template-columns: clamp(4.5rem, 9vw, 8rem) 1fr; gap: 1rem; align-items: baseline;
+  padding: clamp(0.5rem, 1.8vh, 1.2rem) 0; border-bottom: 1px solid var(--rule); }
+.tl-row .t { font-family: var(--mono); color: var(--mid); font-size: var(--t-small); letter-spacing: 0.08em; }
+.tl-row .e { font-size: var(--t-h3); font-weight: 400; }
+.tl-row.hot .t, .tl-row.hot .e { color: var(--ink); font-weight: 700; }
+
+.cards { display: grid; grid-template-columns: repeat(var(--n, 3), 1fr); border-top: 1px solid var(--ink); min-height: 0; }
+.card { padding: clamp(0.7rem, 2.4vh, 2rem) clamp(0.6rem, 1.6vw, 1.6rem) 0 0; min-width: 0; }
+.card + .card { border-left: 1px solid var(--rule); padding-left: clamp(0.6rem, 1.6vw, 1.6rem); }
+.card .no { font-family: var(--mono); color: var(--faint); font-size: clamp(1.4rem, 4.2vh, 3rem); line-height: 1; }
+.card h3 { font-size: var(--t-h3); font-weight: 700; letter-spacing: -0.02em; margin: 0.45em 0 0.45em; }
+.card p { font-size: var(--t-body); color: var(--mid); line-height: 1.55; }
+.card .mono { font-family: var(--mono); font-size: var(--t-small); color: var(--ink); margin-top: 0.8em; display: block; }
+
+.checks { display: flex; flex-direction: column; gap: clamp(0.5rem, 1.8vh, 1.4rem); }
+.check { display: flex; align-items: center; gap: 1rem; font-size: var(--t-h3); }
+.check svg { width: 1.5em; height: 1.5em; flex: none; }
+.check path { fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: square;
+  stroke-dasharray: 24; stroke-dashoffset: 24; transition: stroke-dashoffset 0.6s ease 0.15s; }
+.check.visible path, .no-js .check path { stroke-dashoffset: 0; }
+
+.chain { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--ink); }
+.step { padding: clamp(0.8rem, 2.4vh, 2rem) clamp(0.7rem, 1.4vw, 1.6rem); position: relative; min-width: 0; }
+.step + .step { border-left: 1px solid var(--ink); }
+.step + .step::before { content: '→'; position: absolute; left: -0.6em; top: 0.9rem; background: var(--bg);
+  font-family: var(--mono); line-height: 1; }
+.step .big { font-size: clamp(1.1rem, min(2.2vw, 4.2vh), 2.2rem); white-space: nowrap; font-weight: 200; letter-spacing: -0.03em; margin: 0.35em 0 0.25em; line-height: 1; }
+.step .sub { font-family: var(--mono); font-size: var(--t-small); color: var(--mid); line-height: 1.6; }
+
+.tbl { border-top: 1px solid var(--ink); }
+.row { display: grid; grid-template-columns: clamp(4rem, 7vw, 6.5rem) clamp(7rem, 14vw, 13rem) 1fr; gap: 1rem;
+  align-items: baseline; padding: clamp(0.6rem, 2vh, 1.4rem) 0; border-bottom: 1px solid var(--rule); }
+.row .k { font-family: var(--mono); color: var(--mid); font-size: var(--t-small); letter-spacing: 0.1em; text-transform: uppercase; }
+.row .c { font-size: var(--t-h3); font-weight: 700; letter-spacing: -0.02em; }
+.row .d { font-size: var(--t-body); color: var(--mid); line-height: 1.5; }
+
+.cmp { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--ink); min-height: 0; }
+.cmp .col { padding: clamp(0.8rem, 2.4vh, 2rem) clamp(0.8rem, 1.8vw, 2rem); min-width: 0; }
+.cmp .col.alt { background: var(--ink); color: var(--bg); --mid: #a8a8a4; --rule: #3a3a37; }
+.cmp h3 { font-size: var(--t-h3); font-weight: 700; margin: 0.4em 0 0.6em; letter-spacing: -0.02em; }
+.cmp ul { list-style: none; }
+.cmp li { font-size: var(--t-body); line-height: 1.45; padding: clamp(0.3rem, 0.9vh, 0.6rem) 0; border-top: 1px solid var(--rule); }
+.cmp .col:not(.alt) li { color: var(--mid); }
+
+.thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(0.6rem, 1.4vw, 1.2rem); min-height: 0; }
+.th .pg { aspect-ratio: 16 / 9; background: var(--ink); color: var(--bg); position: relative; overflow: hidden;
+  padding: 0.5em 0.7em 0.5em 1em; font-size: clamp(0.55rem, 0.9vw, 0.8rem); font-weight: 700; }
+.th .pg::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: #777; }
+.th .pg::after { content: ''; position: absolute; left: 1em; right: 0.8em; bottom: 0.7em; height: 36%;
+  background: repeating-linear-gradient(to bottom, #55554f 0 2px, transparent 2px 7px); }
+.th.opt .pg { background: transparent; color: var(--ink); border: 1px dashed var(--mid); }
+.th.opt .pg::before { background: var(--faint); }
+.th.opt .pg::after { background: repeating-linear-gradient(to bottom, var(--faint) 0 2px, transparent 2px 7px); }
+.th .cap { margin-top: 0.5em; font-size: var(--t-small); color: var(--mid); line-height: 1.5; }
+.th .cap b { color: var(--ink); font-weight: 700; }
+
+pre { background: var(--ink); color: var(--bg); font-family: var(--mono); font-size: clamp(0.7rem, min(1vw, 2vh), 0.95rem);
+  line-height: 1.7; padding: clamp(0.8rem, 2.4vh, 1.8rem) clamp(1rem, 2vw, 2rem); border-radius: 0; overflow: hidden; white-space: pre; }
+pre .c { color: #8a8a85; }
+pre .k { color: #f9f9f8; font-weight: 500; }
+
+/* ---------- embedded architecture diagrams ---------- */
+.dia-wrap { flex: 1; min-height: 0; min-width: 0; position: relative; }
+.dia-wrap iframe { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 100%; height: 100%; border: 1px solid var(--rule); background: #fff; pointer-events: none; }
+.dia-wrap.live iframe { pointer-events: auto; }
+.dia-tools { position: absolute; right: 0; bottom: 0; display: flex; gap: 0.5rem; z-index: 2; }
+.dia-tools a, .dia-tools button {
+  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase;
+  background: #f9f9f8; color: #111110; border: 1px solid #111110; padding: 0.4em 0.8em; cursor: pointer; text-decoration: none; }
+.dia-tools a:hover, .dia-tools button:hover { background: #111110; color: #f9f9f8; }
+.slide.side .hero { flex-direction: row; align-items: stretch; }
+.slide.side .side-text { flex: 0 0 clamp(11rem, 26%, 22rem); display: flex; flex-direction: column; justify-content: space-between; gap: var(--gap); }
+.slide.side .side-text .title { font-size: clamp(1.4rem, min(2.6vw, 5vh), 2.6rem); }
+.dia-info { display: flex; gap: clamp(0.8rem, 2.4vw, 2.4rem); flex-wrap: wrap; }
+
+/* ---------- animation ---------- */
+@keyframes riseIn { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.slide.active .rise { animation: riseIn 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--d, 0.15s); }
+.slide.active .fade { animation: fadeIn 0.6s ease both; animation-delay: var(--d, 0.5s); }
+.fragment { opacity: 0; transform: translateY(16px); transition: opacity 0.4s ease, transform 0.4s ease; }
+.fragment.visible { opacity: 1; transform: none; }
+
+/* ---------- help overlay ---------- */
+#help { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: rgba(17,17,16,0.78); }
+#help.open { display: flex; }
+#help .box { background: var(--bg); color: var(--ink); border: 1px solid var(--ink); padding: 1.6rem 2rem; font-family: var(--mono);
+  font-size: 0.8rem; line-height: 2; letter-spacing: 0.04em; max-width: 90vw; }
+#help kbd { border: 1px solid var(--ink); padding: 0.05em 0.5em; margin-right: 0.6em; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px) { .row { grid-template-columns: 4rem 1fr; } .row .d { grid-column: 1 / -1; } }
+@media (max-width: 680px) {
+  .strip-main, .slide.wide .strip-main { grid-template-columns: 1fr; }
+  .index-col { display: none; }
+  .hero { border-right: 0; }
+  .nav-item, .nav-sep { display: none; }
+  .cards { grid-template-columns: 1fr; }
+  .card + .card { border-left: 0; border-top: 1px solid var(--rule); padding-left: 0; }
+  .card { padding-bottom: 0.6rem; }
+  .card .no { display: none; }
+  .chain { grid-template-columns: 1fr 1fr; }
+  .step + .step::before { display: none; }
+  .step:nth-child(n+3) { border-top: 1px solid var(--ink); }
+  .step:nth-child(3) { border-left: 0; }
+  .cmp { grid-template-columns: 1fr; }
+  .thumbs { grid-template-columns: 1fr 1fr; }
+  .tl-row { grid-template-columns: 3.5rem 1fr; }
+}
+@media (max-height: 520px) {
+  :root { --t-h2: 1.15rem; --t-h3: 0.82rem; --t-body: 0.66rem; --t-small: 0.54rem; --pad-x: 1rem; --gap: 0.45rem; }
+  .strip-main, .slide.wide .strip-main { grid-template-columns: 1fr; }
+  .index-col { display: none; }
+  .hero { border-right: 0; }
+  .card .no, .card .mono, .cmp .lab, .th .cap br { display: none; }
+  .card { padding-top: 0.4rem; }
+  .cmp .col, .step { padding: 0.45rem 0.7rem; }
+  .cmp li { padding: 0.15rem 0; }
+  .thumbs { grid-template-columns: repeat(6, 1fr); gap: 0.4rem; }
+  .th .pg { font-size: 0.42rem; padding: 0.3em 0.4em 0.3em 0.6em; }
+  .th .cap { font-size: 0.5rem; }
+  .tl-row, .row { padding: 0.3rem 0; }
+  .cover .title-giant { font-size: 2.6rem; }
+  .strip-bottom { display: none; }
+  .strip-top { padding: 0.4rem var(--pad-x); }
+  .hero { padding: 0.6rem var(--pad-x); gap: 0.5rem; }
+  .opt-hide { display: none !important; }
+}
+@media (max-height: 700px) and (max-width: 680px) { .opt-hide { display: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
+  .fragment { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+<noscript><p style="padding:2rem;font-family:sans-serif">此簡報需要啟用 JavaScript。</p></noscript>
+<main id="deck">
+
+<!-- 01 Cover -->
+<section class="slide cover dark" data-group="封面" data-left="ELK Analyser · AI-Driven Log Diagnostics" data-right="16 Slides · ~15 min" data-vert="ELK Analyser · 2026">
+  <div class="hero">
+    <div class="rise">
+      <div class="title-giant">ELK<br><strong>Analyser</strong><em>AI-Driven Log Diagnostics</em></div>
+    </div>
+    <div class="fade" style="--d:.7s">
+      <div class="tagline-row">
+        <div class="tagline-item"><span class="tagline-key">是什麼</span><span class="tagline-val">自動化日誌分析</span></div>
+        <div class="tagline-item"><span class="tagline-key">怎麼做</span><span class="tagline-val">根因推理</span></div>
+        <div class="tagline-item"><span class="tagline-key">得到</span><span class="tagline-val">即時診斷報告</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 Situation -->
+<section class="slide" data-group="現況" data-left="Situation · 現況" data-right="Scene · 02:00 AM" data-vert="Situation">
+  <div class="hero">
+    <div class="rise"><div class="kicker">S — Situation</div>
+      <h2 class="title" style="margin-top:.5em">Every Incident <strong>Starts the Same Way</strong></h2></div>
+    <div class="timeline fade" style="--d:.5s">
+      <div class="tl-row"><span class="t">02:00</span><span class="e">Kibana 警報觸發</span></div>
+      <div class="tl-row"><span class="t">02:05</span><span class="e">工程師打開 Kibana，面對幾百筆日誌</span></div>
+      <div class="tl-row"><span class="t">02:05 →</span><span class="e">手動找關鍵字、關聯 TraceID、猜根因</span></div>
+      <div class="tl-row hot"><span class="t">30~60 分鐘後</span><span class="e">才能確認是哪個服務出問題</span></div>
+    </div>
+    <p class="note opt-hide">* 情境示意，時間為常見經驗值，非實測統計。</p>
+  </div>
+</section>
+
+<!-- 03 Complication -->
+<section class="slide" data-group="問題" data-left="Complication · 問題" data-right="3 Pain Points" data-vert="Complication">
+  <div class="hero">
+    <div class="rise"><div class="kicker">C — Complication</div>
+      <h2 class="title" style="margin-top:.5em">3 Things That <strong>Slow You Down</strong></h2></div>
+    <div class="cards fade" style="--n:3;--d:.5s">
+      <div class="card"><span class="no">01</span><h3>日誌量大</h3><p>人工篩選沒效率。<br>真正的錯誤藏在幾百筆日誌裡。</p></div>
+      <div class="card"><span class="no">02</span><h3>關聯難</h3><p>TraceID 跨服務，手動追蹤容易漏掉一段。</p></div>
+      <div class="card"><span class="no">03</span><h3>報告慢</h3><p>每次都要重寫事故報告，格式也不一致。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 Question -->
+<section class="slide" data-group="提問" data-left="Question · 關鍵問題" data-right="→ 逐步顯示" data-vert="Question">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Q — Question</div>
+      <h2 class="title" style="margin-top:.5em">Can AI Do This <strong>in One Click?</strong></h2></div>
+    <div class="checks">
+      <div class="check fragment" data-fragment><svg viewBox="0 0 24 24"><path d="M3 12.5l6 6L21 6"/></svg>自動從 ELK 拉日誌</div>
+      <div class="check fragment" data-fragment><svg viewBox="0 0 24 24"><path d="M3 12.5l6 6L21 6"/></svg>自動推理根因</div>
+      <div class="check fragment" data-fragment><svg viewBox="0 0 24 24"><path d="M3 12.5l6 6L21 6"/></svg>自動生成標準診斷報告</div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 Answer -->
+<section class="slide" data-group="解答" data-left="Answer · 解答" data-right="E2E · 4 Steps" data-vert="Answer">
+  <div class="hero">
+    <div class="rise"><div class="kicker">A — Answer</div>
+      <h2 class="title" style="margin-top:.5em">ELK Analyser — <strong>四個步驟，一次閉環</strong></h2></div>
+    <div class="chain">
+      <div class="step fragment" data-fragment><span class="lab">01</span><div class="big">觸發</div><div class="sub">Kibana Alert<br>Grafana · API · CLI</div></div>
+      <div class="step fragment" data-fragment><span class="lab">02</span><div class="big">提取日誌</div><div class="sub">Elasticsearch</div></div>
+      <div class="step fragment" data-fragment><span class="lab">03</span><div class="big">AI 推理</div><div class="sub">Bob CLI<br>log-analyst mode</div></div>
+      <div class="step fragment" data-fragment><span class="lab">04</span><div class="big">PPTX 報告</div><div class="sub">自動產出、可下載</div></div>
+    </div>
+    <p class="lead fragment" data-fragment>從告警觸發到診斷報告，<b>全程自動，無需人工介入。</b></p>
+  </div>
+</section>
+
+<!-- 06 Pipeline -->
+<section class="slide" data-group="運作" data-left="How It Works · Pipeline" data-right="4 Stages" data-vert="Pipeline">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Under the Hood</div>
+      <h2 class="title" style="margin-top:.5em">4-Stage <strong>Pipeline</strong></h2></div>
+    <div class="tbl">
+      <div class="row fragment" data-fragment><span class="k">Stage 1</span><span class="c">Extractor</span><span class="d">從 Elasticsearch 撈日誌，並管理 Checkpoint（斷點）</span></div>
+      <div class="row fragment" data-fragment><span class="k">Stage 2</span><span class="c">Preprocessor</span><span class="d">按 TraceID 分組，建出事件鏈（沒有 TraceID 就用 5 分鐘時間窗口）</span></div>
+      <div class="row fragment" data-fragment><span class="k">Stage 3</span><span class="c">Bob Bridge</span><span class="d">呼叫 Bob CLI（log-analyst mode）推理根因</span></div>
+      <div class="row fragment" data-fragment><span class="k">Stage 4</span><span class="c">Report Builder</span><span class="d">生成 PPTX 診斷報告，寫入任務紀錄</span></div>
+    </div>
+    <p class="note fragment" data-fragment>每個階段只做一件事。分析失敗只影響當次任務，不會更新 Checkpoint。</p>
+  </div>
+</section>
+
+<!-- 07 Analysis workflow (embedded diagram) -->
+<section class="slide wide side" data-group="運作" data-left="Analysis Workflow · 分析流程" data-right="Diagram" data-vert="Analysis Workflow">
+  <div class="hero">
+    <div class="side-text">
+      <div class="rise"><div class="kicker">One Request, Four Layers</div>
+        <h2 class="title" style="margin-top:.5em">觸發到報告<br><strong>完整路徑</strong></h2></div>
+      <div class="note">同步 <code>/analyse</code>：同一視窗 5 分鐘內已有完成的任務，直接回傳既有結果（Instana 觸發除外）<br><br>請求進入單一 worker 佇列，序列執行</div>
+    </div>
+    <div class="dia-wrap" data-ar="1.25"><iframe title="分析流程圖" data-src="arch-diagram/analysis-workflow.html?embed=1&theme=light" loading="lazy"></iframe>
+      <div class="dia-tools"><button type="button" data-toggle-live>互動 (I)</button><a href="arch-diagram/analysis-workflow.html" target="_blank" rel="noopener">完整圖 ↗</a></div></div>
+  </div>
+</section>
+
+<!-- 08 Triggers -->
+<section class="slide" data-group="運作" data-left="Trigger Modes · 觸發方式" data-right="4 Ways" data-vert="Trigger Modes">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Start an Analysis</div>
+      <h2 class="title" style="margin-top:.5em">4 Ways to <strong>Start</strong></h2></div>
+    <div class="cards" style="--n:4">
+      <div class="card fragment" data-fragment><span class="no">01</span><h3>Kibana Alert</h3><p><b>自動。</b>告警一觸發，Webhook 呼叫 API 開始分析。</p><span class="mono">Webhook → POST /analyse</span></div>
+      <div class="card fragment" data-fragment><span class="no">02</span><h3>Grafana</h3><p>整合 Grafana 告警，也可從 Dashboard 連結一鍵觸發。</p><span class="mono">POST /analyse<br>GET /analyse/trigger</span></div>
+      <div class="card fragment" data-fragment><span class="no">03</span><h3>REST API</h3><p>可掛進任何系統。Web UI 也走這條路。</p><span class="mono">POST /analyse<br>POST /analyse/async</span></div>
+      <div class="card fragment" data-fragment><span class="no">04</span><h3>CLI</h3><p>手動指定時間範圍，適合補跑或除錯。</p><span class="mono">python cli.py run</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 09 Instana -->
+<section class="slide" data-group="運作" data-left="Instana APM · 進階功能" data-right="Optional" data-vert="Instana APM">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Optional</div>
+      <h2 class="title" style="margin-top:.5em">Add APM Context <strong>with Instana</strong></h2></div>
+    <div class="cmp fade" style="--d:.5s">
+      <div class="col"><span class="lab">Mode A</span><h3>純 ELK</h3>
+        <ul><li>分析日誌中的錯誤與事件鏈</li><li>依 TraceID / 時間窗口推理根因</li><li>預設模式，不需額外設定</li></ul></div>
+      <div class="col alt"><span class="lab">Mode B · --with-instana</span><h3>ELK + Instana</h3>
+        <ul><li>Service 層的 P95 延遲、錯誤率</li><li>跨服務 Trace 錯誤率</li><li>JVM heap / Artemis 佇列指標</li><li>PPTX 自動多一頁 APM 概覽</li><li>Instana 失敗時自動降級為純 ELK</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- 10 Data flow (embedded diagram) -->
+<section class="slide wide" data-group="運作" data-left="Data Flow · 資料流" data-right="Diagram" data-vert="Data Flow">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Data Journey</div>
+      <h2 class="title" style="margin-top:.4em">從應用日誌到<strong>根因報告</strong></h2></div>
+    <div class="dia-wrap" data-ar="2.05"><iframe title="資料流圖" data-src="arch-diagram/data-flow.html?embed=1&theme=light" loading="lazy"></iframe>
+      <div class="dia-tools"><button type="button" data-toggle-live>互動 (I)</button><a href="arch-diagram/data-flow.html" target="_blank" rel="noopener">完整圖 ↗</a></div></div>
+    <div class="dia-info note">Liberty / Artemis / PostgreSQL 日誌 → Logstash → Elasticsearch → Pipeline → Bob CLI → PPTX + SQLite</div>
+  </div>
+</section>
+
+<!-- 11 Output -->
+<section class="slide" data-group="產出" data-left="Output · 產出" data-right="PPTX" data-vert="Output">
+  <div class="hero">
+    <div class="rise"><div class="kicker">What You Get</div>
+      <h2 class="title" style="margin-top:.5em">A Ready-to-Share <strong>PPTX</strong></h2></div>
+    <div class="thumbs fade" style="--d:.5s">
+      <div class="th"><div class="pg">系統異常根因分析報告</div><div class="cap"><b>封面</b><br>分析時間範圍、任務 ID</div></div>
+      <div class="th"><div class="pg">執行摘要</div><div class="cap"><b>KPI 摘要</b><br>異常總數、CRITICAL / WARNING、受影響模組</div></div>
+      <div class="th"><div class="pg">事故狀況與影響範圍</div><div class="cap"><b>事故與影響</b><br>受影響服務、客戶 / 業務 / 營運影響</div></div>
+      <div class="th opt"><div class="pg">Instana APM 概覽</div><div class="cap"><b>APM 概覽（可選）</b><br>Calls、錯誤率、P95、Events</div></div>
+      <div class="th"><div class="pg">根因分析 1/N</div><div class="cap"><b>根因分析</b><br>每條事件鏈一頁，最多 5 頁</div></div>
+      <div class="th"><div class="pg">改善建議</div><div class="cap"><b>改善建議</b><br>短期應急 + 長期架構改善</div></div>
+    </div>
+    <p class="note opt-hide">另含 2 張章節分隔頁。</p>
+  </div>
+</section>
+
+<!-- 12 System architecture (embedded diagram) -->
+<section class="slide wide" data-group="架構" data-left="Architecture · 系統架構" data-right="Diagram" data-vert="Architecture">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Architecture at a Glance</div>
+      <h2 class="title" style="margin-top:.4em">FastAPI 平台 × <strong>Bob AI × Instana</strong></h2></div>
+    <div class="dia-wrap" data-ar="2.08"><iframe title="系統架構圖" data-src="arch-diagram/system-architecture.html?embed=1&theme=light" loading="lazy"></iframe>
+      <div class="dia-tools"><button type="button" data-toggle-live>互動 (I)</button><a href="arch-diagram/system-architecture.html" target="_blank" rel="noopener">完整圖 ↗</a></div></div>
+    <div class="dia-info">
+      <div class="tagline-item"><span class="tagline-key">Frontend</span><span class="tagline-val">Nginx :3001 → Grafana + Web UI</span></div>
+      <div class="tagline-item"><span class="tagline-key">Backend</span><span class="tagline-val">FastAPI :8080</span></div>
+      <div class="tagline-item"><span class="tagline-key">AI Engine</span><span class="tagline-val">Bob CLI</span></div>
+      <div class="tagline-item"><span class="tagline-key">Storage</span><span class="tagline-val">Elasticsearch + SQLite</span></div>
+      <div class="tagline-item"><span class="tagline-key">Optional</span><span class="tagline-val">Instana（APM）</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 Container architecture (embedded diagram) -->
+<section class="slide wide" data-group="架構" data-left="Deployment · 容器架構" data-right="Diagram" data-vert="Deployment">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Podman Compose</div>
+      <h2 class="title" style="margin-top:.4em">9 個容器，<strong>2 個網路</strong></h2></div>
+    <div class="dia-wrap" data-ar="1.89"><iframe title="容器架構圖" data-src="arch-diagram/container-architecture.html?embed=1&theme=light" loading="lazy"></iframe>
+      <div class="dia-tools"><button type="button" data-toggle-live>互動 (I)</button><a href="arch-diagram/container-architecture.html" target="_blank" rel="noopener">完整圖 ↗</a></div></div>
+    <div class="dia-info note">elk-analyser-network 10.89.1.0/24 · japp-network 10.89.2.0/24 · 7 個 Volume · Instana SaaS 為外部服務</div>
+  </div>
+</section>
+
+<!-- 14 Design decisions — overview -->
+<section class="slide" data-group="架構" data-left="Design Decisions · 設計決策" data-right="4 Choices" data-vert="Design Decisions">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Why It Works This Way</div>
+      <h2 class="title" style="margin-top:.5em">Key <strong>Design Decisions</strong></h2></div>
+    <div class="cards" style="--n:4">
+      <div class="card fragment" data-fragment><span class="no">01</span><h3>同步 vs 非同步</h3><p>兩個端點：<code>/analyse</code> 等結果，<code>/analyse/async</code> 先拿 job_id。觸發可靠性的保障。</p></div>
+      <div class="card fragment" data-fragment><span class="no">02</span><h3>斷點設計</h3><p>記錄上次結束時間，下次從這裡接續，不漏不重。事件鏈完整性的保障。</p></div>
+      <div class="card fragment" data-fragment><span class="no">03</span><h3>無異常設計</h3><p><code>analyse()</code> 與 <code>build_report()</code> 回傳錯誤 dict 而非丟例外，失敗只影響當次任務。分析冪等性的保障。</p></div>
+      <div class="card fragment" data-fragment><span class="no">04</span><h3>欄位映射可配置</h3><p>ES 欄位名稱走 <code>config.yaml</code>，換環境不改程式碼。推理準確性的保障。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 14-01 同步 vs 非同步 詳解 -->
+<section class="slide" data-group="架構" data-left="Design Decisions · 01" data-right="同步 vs 非同步" data-vert="Sync / Async">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Decision 01 — Trigger Reliability</div>
+      <h2 class="title" style="margin-top:.5em">同步 vs <strong>非同步</strong></h2></div>
+    <div class="tbl fade" style="--d:.3s">
+      <div class="row">
+        <span class="k">問題</span>
+        <span class="c">分析耗時不定</span>
+        <span class="d">Bob CLI 推理一次可能需要 30–90 秒。告警系統（Grafana Webhook）發出 HTTP 請求後不能一直等，否則連線逾時就失去這次觸發。</span>
+      </div>
+      <div class="row">
+        <span class="k">設計</span>
+        <span class="c">兩個端點</span>
+        <span class="d"><code>/analyse</code> 同步等待，回傳完整結果；<code>/analyse/async</code> 立即回傳 <code>job_id</code>，讓呼叫方稍後輪詢 <code>/jobs/{id}/status</code>。Worker 保持單一佇列，序列執行，避免兩次分析互相干擾。</span>
+      </div>
+      <div class="row">
+        <span class="k">例子</span>
+        <span class="c">Grafana 告警</span>
+        <span class="d">凌晨 3 點資料庫異常，Grafana 觸發 Webhook 呼叫 <code>/analyse</code>。若用同步，30 秒後 Grafana 拿到 200 OK，確認已觸發。若改非同步，Grafana 先拿到 <code>job_id=42</code>，Web UI 隨後顯示「分析中…」直到完成。</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 14-02 斷點設計 詳解 -->
+<section class="slide" data-group="架構" data-left="Design Decisions · 02" data-right="斷點設計" data-vert="Checkpoint">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Decision 02 — Event Chain Integrity</div>
+      <h2 class="title" style="margin-top:.5em">斷點<strong>設計</strong></h2></div>
+    <div class="tbl fade" style="--d:.3s">
+      <div class="row">
+        <span class="k">問題</span>
+        <span class="c">分析從哪裡開始？</span>
+        <span class="d">日誌是連續產生的，每次告警觸發若都從「過去一小時」抓，同一筆錯誤可能被重複分析；若只抓「最新」又可能漏掉剛發生的事件。</span>
+      </div>
+      <div class="row">
+        <span class="k">設計</span>
+        <span class="c">記錄游標，接續分析</span>
+        <span class="d">每次分析<b>成功完成</b>後，把查詢視窗的結束時間存進 Checkpoint（SQLite id=1）。下一次分析從這個時間點繼續，確保不漏不重。失敗的分析<b>不更新</b> Checkpoint，下次仍從同一點重試。</span>
+      </div>
+      <div class="row">
+        <span class="k">例子</span>
+        <span class="c">連續兩次告警</span>
+        <span class="d">08:00 告警分析了 07:00–08:00，成功，Checkpoint 寫入 08:00。08:30 再次告警，自動從 08:00 接續，分析 08:00–08:30，不會重複看 07:30 的那批日誌。</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 14-03 無異常設計 詳解 -->
+<section class="slide" data-group="架構" data-left="Design Decisions · 03" data-right="無異常設計" data-vert="No Exception">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Decision 03 — Analysis Idempotency</div>
+      <h2 class="title" style="margin-top:.5em">無異常<strong>設計</strong></h2></div>
+    <div class="tbl fade" style="--d:.3s">
+      <div class="row">
+        <span class="k">問題</span>
+        <span class="c">一次失敗不該影響全局</span>
+        <span class="d">根因分析過程中可能因 LLM 輸出格式異常、ES 連線逾時、報告生成失敗等原因中斷。若直接拋出例外，呼叫方不知道該怎麼處理，且 Checkpoint 可能在錯誤狀態下被更新。</span>
+      </div>
+      <div class="row">
+        <span class="k">設計</span>
+        <span class="c">回傳 dict，不丟例外</span>
+        <span class="d"><code>analyse()</code> 與 <code>build_report()</code> 任何失敗都回傳 <code>{"error": "…"}</code> dict。API 層讀到 error key 就標記任務為 failed，Checkpoint <b>不移動</b>，下次分析可以從同一個視窗重試，不影響歷史紀錄。</span>
+      </div>
+      <div class="row">
+        <span class="k">例子</span>
+        <span class="c">Bob CLI 輸出解析失敗</span>
+        <span class="d">Bob 回傳的 JSON 多了一層 markdown fence，<code>json.loads()</code> 失敗。若丟例外，程式崩潰，Checkpoint 停在上次位置，下次重啟後重跑同樣視窗。現在則是回傳 <code>{"error": "JSON parse error"}</code>，任務標記 failed，Checkpoint 不動，下次仍可重試同一個時間段。</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 14-04 欄位映射可配置 詳解 -->
+<section class="slide" data-group="架構" data-left="Design Decisions · 04" data-right="欄位映射可配置" data-vert="Field Mapping">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Decision 04 — Cross-Environment Accuracy</div>
+      <h2 class="title" style="margin-top:.5em">欄位映射<strong>可配置</strong></h2></div>
+    <div class="tbl fade" style="--d:.3s">
+      <div class="row">
+        <span class="k">問題</span>
+        <span class="c">各環境 ES 欄位名不同</span>
+        <span class="d">Logstash pipeline、不同版本的 APM agent、或客戶自訂 index template，都可能讓同一概念（如「log level」）對應到不同欄位：<code>log.level</code>、<code>severity</code>、<code>level</code>。若寫死在程式裡，換環境就要改程式碼，風險高。</span>
+      </div>
+      <div class="row">
+        <span class="k">設計</span>
+        <span class="c">一份 config 對應一個環境</span>
+        <span class="d"><code>config.yaml</code> 的 <code>field_mapping</code> 區塊宣告欄位別名。Preprocessor 的 <code>_normalise_event()</code> 透過 <code>_safe_get(doc, fm["level"])</code> 讀值，支援巢狀路徑（如 <code>log.level</code>）。換環境只改 config，程式碼不動。</span>
+      </div>
+      <div class="row">
+        <span class="k">例子</span>
+        <span class="c">新環境 onboarding</span>
+        <span class="d">現有環境用 <code>log.level</code>，新接入的系統用 <code>severity_text</code>。只需在 <code>config.yaml</code> 把 <code>level: "severity_text"</code> 改掉，不需要改 Preprocessor、Bob Bridge 或報告生成的任何程式碼。Bob 收到的 <code>event_chain</code> 格式始終一致。</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 14b Log 的根本限制：設計出發點 -->
+<section class="slide" data-group="架構" data-left="Design Decisions · 根因分析出發點" data-right="RCA Problem" data-vert="RCA Problem">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Why Log Alone Is Not Enough</div>
+      <h2 class="title" style="margin-top:.5em">Log 不知道<strong> Application Flow</strong></h2></div>
+    <div class="tbl fade" style="--d:.4s">
+      <div class="row"><span class="k">Log</span><span class="c">描述事件</span><span class="d">告訴你「<b>什麼時間發生了什麼 ERROR</b>」，但不知道服務之間怎麼呼叫、誰先誰後。</span></div>
+      <div class="row"><span class="k">APM Trace</span><span class="c">描述因果鏈</span><span class="d">告訴你「<b>A 呼叫 B → B 呼叫 C → C 失敗</b>」，以及哪個服務的整體 error rate 最高。</span></div>
+      <div class="row"><span class="k">Infra Metrics</span><span class="c">描述系統狀態</span><span class="d">告訴你「<b>JVM heap / Artemis queue 在哪個時間點惡化</b>」，量化嚴重程度。</span></div>
+    </div>
+    <p class="note fade" style="--d:.7s">三種信號各有盲點。讓 Bob 有效推理的前提：把三層證據疊加後再傳入。</p>
+  </div>
+</section>
+
+<!-- 14c 讓 Bob 有效推理：三層證據疊加 -->
+<section class="slide" data-group="架構" data-left="Design Decisions · Bob 推理原則" data-right="3 Principles" data-vert="RCA Principles">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Design Principles for Effective RCA</div>
+      <h2 class="title" style="margin-top:.5em">讓 Bob 聚焦<strong>根因</strong>的三個原則</h2></div>
+    <div class="tbl fade" style="--d:.4s">
+      <div class="row fragment" data-fragment>
+        <span class="k">原則 01</span>
+        <span class="c">Trace ID 是因果主鍵</span>
+        <span class="d">同一次請求在 Liberty → Artemis → PostgreSQL 產生的 ERROR，用 TraceID 串成單一 <code>event_chain</code>，Bob 看到的是「一次失敗的完整時序」，而非散落的 ERROR。</span>
+      </div>
+      <div class="row fragment" data-fragment>
+        <span class="k">原則 02</span>
+        <span class="c">APM 補因果方向</span>
+        <span class="d">Instana <code>trace_summary</code> 注入各服務的 error rate（如 bankdb 87% vs liberty 3%），讓 Bob 能區分根因與 cascade failure，而非猜測。</span>
+      </div>
+      <div class="row fragment" data-fragment>
+        <span class="k">原則 03</span>
+        <span class="c">聚合統計補樣本盲點</span>
+        <span class="d"><code>es_agg_summary</code> 注入全量錯誤分布，Bob 看到的是「真實比例」，而非從有限樣本重新推斷——直接消除樣本偏差。</span>
+      </div>
+    </div>
+    <p class="note fragment" data-fragment>無 TraceID 時退守 5 分鐘時間窗口（Fallback），chain_id 前綴為 <code>time_window_</code>，Bob 推理時可識別信心度差異。</p>
+  </div>
+</section>
+
+<!-- 15 Quick start -->
+<section class="slide" data-group="上手" data-left="Quick Start · 快速上手" data-right="3 Commands" data-vert="Quick Start">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Hands-on</div>
+      <h2 class="title" style="margin-top:.5em">Up and Running in <strong>3 Commands</strong></h2></div>
+<pre class="fade" style="--d:.5s"><span class="c"># 1. 啟動服務</span>
+<span class="k">podman-compose</span> up --build -d
+
+<span class="c"># 2. 指定時間範圍，觸發一次分析</span>
+<span class="k">podman exec</span> elk-analyser python cli.py run \
+  --from "2026-01-15 08:00" --to "2026-01-15 12:00"
+
+<span class="c"># 3. 下載 PPTX 報告</span>
+<span class="k">curl</span> -o report.pptx http://localhost:8080/jobs/1/report</pre>
+    <p class="note opt-hide">完整 stack（含 Banking Demo + Instana Agent）的啟動方式見 README。</p>
+  </div>
+</section>
+
+<!-- 16 Closing -->
+<section class="slide dark" data-group="上手" data-left="Closing · 結尾" data-right="Thank You" data-vert="From Alert to Report">
+  <div class="hero">
+    <div class="rise"><div class="kicker">Takeaways</div>
+      <h2 class="title" style="margin-top:.5em">From Alert to Report — <strong>Automatically</strong></h2></div>
+    <div class="timeline fade" style="--d:.5s">
+      <div class="tl-row"><span class="t">01</span><span class="e">一次告警 → 一份完整診斷報告，無需人工介入</span></div>
+      <div class="tl-row"><span class="t">02</span><span class="e">支援純 ELK 與 ELK + Instana 兩種模式</span></div>
+      <div class="tl-row"><span class="t">03</span><span class="e">配置驅動，換環境不改程式碼</span></div>
+    </div>
+    <p class="note fade" style="--d:.9s">GitHub · <a href="https://github.com/owhc/elk-analyser" target="_blank" rel="noopener">github.com/owhc/elk-analyser</a></p>
+  </div>
+</section>
+
+</main>
+
+<div id="hud">
+  <label class="pg" title="選擇頁面"><select id="hud-in" aria-label="跳至頁面"></select> / <span id="hud-tot">01</span></label>
+  <button type="button" id="hud-fs" title="全螢幕 (F)" aria-label="切換全螢幕">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 5V1h4M11 1h4v4M15 11v4h-4M5 15H1v-4"/></svg>
+  </button>
+</div>
+
+<div id="help"><div class="box">
+  <div><kbd>←</kbd><kbd>→</kbd> 上一步 / 下一步（逐步顯示後換頁）</div>
+  <div><kbd>Home</kbd><kbd>End</kbd> 第一頁 / 最後一頁</div>
+  <div><kbd>I</kbd> 切換架構圖互動（拖曳 / 縮放）</div>
+  <div><kbd>F</kbd> 全螢幕 &nbsp; <kbd>?</kbd> 本說明 &nbsp; <kbd>Esc</kbd> 關閉</div>
+</div></div>
+
+<script>
+/* Deck controller: builds slide chrome from data-* attributes, handles
+   keyboard / click / swipe navigation, step-by-step fragments, lazy iframes. */
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var total = slides.length;
+  var groups = [];
+  slides.forEach(function (s) { var g = s.dataset.group; if (groups.indexOf(g) < 0) groups.push(g); });
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+
+  // ---- build chrome ----
+  slides.forEach(function (s, i) {
+    var hero = s.querySelector('.hero');
+    var bar = document.createElement('div'); bar.className = 'accent-bar';
+    var top = document.createElement('div'); top.className = 'strip-top';
+    top.innerHTML = '<span class="stamp"></span><span class="stamp right"></span>';
+    top.children[0].textContent = s.dataset.left;
+    top.children[1].textContent = s.dataset.right;
+    var main = document.createElement('div'); main.className = 'strip-main';
+    var idx = document.createElement('div'); idx.className = 'index-col';
+    idx.innerHTML = '<span class="slide-number"></span><span class="vert-text"></span>';
+    idx.children[0].textContent = pad(i + 1);
+    idx.children[1].textContent = s.dataset.vert;
+    var bottom = document.createElement('div'); bottom.className = 'strip-bottom';
+    groups.forEach(function (g, gi) {
+      if (gi) { var sep = document.createElement('span'); sep.className = 'nav-sep'; sep.textContent = '/'; bottom.appendChild(sep); }
+      var it = document.createElement('span');
+      it.className = 'nav-item ' + (g === s.dataset.group ? 'active' : 'dim');
+      it.textContent = g; bottom.appendChild(it);
+    });
+    s.insertBefore(bar, s.firstChild);
+    s.insertBefore(top, hero);
+    s.insertBefore(main, hero);
+    main.appendChild(hero); main.appendChild(idx);
+    s.appendChild(bottom);
+  });
+
+  // ---- fit each diagram iframe to its aspect ratio inside the available box ----
+  function fit() {
+    Array.prototype.forEach.call(document.querySelectorAll('.dia-wrap'), function (w) {
+      var f = w.querySelector('iframe'), ar = parseFloat(w.dataset.ar);
+      var bw = w.clientWidth, bh = w.clientHeight; if (!bw || !bh) return;
+      var iw = Math.min(bw, bh * ar), ih = iw / ar;
+      f.style.width = Math.floor(iw) + 'px'; f.style.height = Math.floor(ih) + 'px';
+    });
+  }
+  window.addEventListener('resize', fit);
+
+  // ---- navigation state ----
+  var cur = -1;
+  function frags(s) { return Array.prototype.slice.call(s.querySelectorAll('[data-fragment]')); }
+  function loadFrames(s) {
+    Array.prototype.forEach.call(s.querySelectorAll('iframe[data-src]'), function (f) {
+      if (!f.src) f.src = f.dataset.src;
+    });
+  }
+  function show(n, showAll) {
+    n = Math.max(0, Math.min(total - 1, n));
+    if (n !== cur) {
+      slides.forEach(function (s) { s.classList.remove('active'); });
+      slides[n].classList.add('active');
+      cur = n;
+      // preload neighbours' diagrams so the transition is instant
+      loadFrames(slides[n]); if (slides[n + 1]) loadFrames(slides[n + 1]);
+      fit();
+      document.getElementById('hud-in').value = n;
+      document.getElementById('hud').classList.toggle('dark', slides[n].classList.contains('dark'));
+      document.title = pad(n + 1) + ' · ELK Analyser';
+      if (location.hash !== '#' + (n + 1)) history.replaceState(null, '', '#' + (n + 1));
+    }
+    frags(slides[n]).forEach(function (f) { f.classList.toggle('visible', !!showAll); });
+  }
+  function next() {
+    var f = frags(slides[cur]).filter(function (x) { return !x.classList.contains('visible'); });
+    if (f.length) f[0].classList.add('visible'); else if (cur < total - 1) show(cur + 1, false);
+  }
+  function prev() {
+    var v = frags(slides[cur]).filter(function (x) { return x.classList.contains('visible'); });
+    if (v.length) v[v.length - 1].classList.remove('visible'); else if (cur > 0) show(cur - 1, true);
+  }
+  function toggleLive() {
+    var w = slides[cur].querySelector('.dia-wrap'); if (w) w.classList.toggle('live');
+  }
+  function toggleFs() {
+    var d = document, el = d.documentElement;
+    if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+    else { var rq = el.requestFullscreen || el.webkitRequestFullscreen; if (rq) rq.call(el); }
+  }
+  function fromHash() { var n = parseInt(location.hash.slice(1), 10); return isNaN(n) ? 0 : n - 1; }
+
+  var hudIn = document.getElementById('hud-in');
+  document.getElementById('hud-tot').textContent = pad(total);
+  slides.forEach(function (s, i) {
+    var o = document.createElement('option'); o.value = i;
+    o.textContent = pad(i + 1) + ' · ' + (s.dataset.vert || s.dataset.left); hudIn.appendChild(o);
+  });
+  hudIn.addEventListener('change', function () { show(parseInt(hudIn.value, 10), false); hudIn.blur(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.target === hudIn) {
+      if (e.key === 'Escape') hudIn.blur();
+      e.stopPropagation(); return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var help = document.getElementById('help');
+    switch (e.key) {
+      case 'ArrowRight': case 'PageDown': case ' ': case 'Enter': e.preventDefault(); next(); break;
+      case 'ArrowLeft': case 'PageUp': case 'Backspace': e.preventDefault(); prev(); break;
+      case 'Home': show(0, false); break;
+      case 'End': show(total - 1, true); break;
+      case 'i': case 'I': toggleLive(); break;
+      case 'f': case 'F': toggleFs(); break;
+      case '?': help.classList.toggle('open'); break;
+      case 'Escape': help.classList.remove('open'); break;
+    }
+  });
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('a, button, iframe, #help, #hud')) {
+      if (e.target.closest('#hud-fs')) toggleFs();
+      var b = e.target.closest('[data-toggle-live]'); if (b) toggleLive();
+      return;
+    }
+    if (window.getSelection && String(window.getSelection())) return;
+    (e.clientX < window.innerWidth * 0.25) ? prev() : next();
+  });
+  var x0 = null;
+  document.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (x0 === null) return;
+    var dx = e.changedTouches[0].clientX - x0; x0 = null;
+    if (Math.abs(dx) > 50) (dx < 0 ? next() : prev());
+  }, { passive: true });
+  window.addEventListener('hashchange', function () { show(fromHash(), false); });
+
+  show(fromHash(), false);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "cdb24123-5c71-40f8-8b01-04814a9f9df1",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/ochen/dev/elk-analyser/.archify/architecture-system-20261020-222209/candidate.json",
+  "output": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/system-architecture.html",
+  "specification": {
+    "sha256": "1cddbe49ae79252c9344fbe7b9680aefa730e7fd78abacf0a2e7474c35c0a051",
+    "bytes": 5916
+  },
+  "artifact": {
+    "sha256": "22d4d76d1795937dbba9bd5646a51ab69336083657a3052d5013213c4f09a370",
+    "bytes": 845343
+  }
+}

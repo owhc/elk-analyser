@@ -42,10 +42,10 @@ public class JmsConfig {
     @Value("${db.name:bankdb}")
     private String dbName;
 
-    @Value("${db.user:db2inst1}")
+    @Value("${db.user:bankuser}")
     private String dbUser;
 
-    @Value("${db.pass:db2admin123}")
+    @Value("${db.pass:bankpassword}")
     private String dbPass;
 
     /**

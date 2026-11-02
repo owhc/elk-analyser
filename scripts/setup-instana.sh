@@ -43,7 +43,7 @@ echo "✓ JAR 已放入 volume ${VOLUME_NAME}"
 echo ""
 echo "=== [4/4] 授予 PostgreSQL pg_monitor role ==="
 echo "   （需等 banking-db 容器啟動後執行）"
-echo "   指令：podman exec -it banking-db psql -U db2inst1 -d bankdb -c \"GRANT pg_monitor TO db2inst1;\""
+echo "   指令：podman exec -it banking-db psql -U bankuser -d bankdb -c \"GRANT pg_monitor TO bankuser;\""
 
 echo ""
 echo "========================================================"

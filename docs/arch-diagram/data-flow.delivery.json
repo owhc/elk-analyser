@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "d8c4135f-8693-494d-a97c-5bebf6185d5b",
+  "status": "current",
+  "command": "deliver",
+  "type": "dataflow",
+  "input": "/Users/ochen/dev/elk-analyser/.archify/dataflow-data-20261020-222209/candidate.json",
+  "output": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/data-flow.html",
+  "specification": {
+    "sha256": "04a75595afa1191a620fc5958079ca4d090b82e256c9a183893e640ca7842c63",
+    "bytes": 5541
+  },
+  "artifact": {
+    "sha256": "b086b3e286ee3a2d8b0fa5fda4d384b4ac861f64d0ad63e01adcf132d2fd1873",
+    "bytes": 831855
+  }
+}

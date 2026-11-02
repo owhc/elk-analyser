@@ -181,8 +181,6 @@ def main(from_time: str, to_time: str, no_trigger: bool, volume_dir: str):
     vol_dir.mkdir(parents=True, exist_ok=True)
     vol_path = vol_dir / "was_mq_postgres_fake.json"
     vol_path.write_text(json.dumps(logs, ensure_ascii=False, indent=2), encoding="utf-8")
-    # 同時相容舊檔名
-    (vol_dir / "was_mq_db2_fake.json").write_text(json.dumps(logs, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info("已寫入 Volume：%s", vol_path)
 
     # 同步更新 mock 資料（供 extractor mock 模式讀取）

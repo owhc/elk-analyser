@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "ELK Analyser — 資料流",
+    "subtitle": "從應用日誌到 Bob AI 根因報告的完整資料旅程",
+    "output": "docs/arch-diagram/data-flow.html",
+    "locale": "zh-TW",
+    "quality_profile": "showcase"
+  },
+  "stages": [
+    { "label": "來源" },
+    { "label": "收集 / 轉換" },
+    { "label": "提取 / 上下文" },
+    { "label": "AI 處理" },
+    { "label": "輸出" }
+  ],
+  "nodes": [
+    { "id": "banking_app",  "type": "backend",   "label": "WAS Liberty",     "sublabel": "banking-app :9080", "stage": 0, "row": 0, "tag": "Spring Boot WAR" },
+    { "id": "artemis",      "type": "messagebus","label": "Artemis MQ",      "sublabel": "bankingQueue AMQP", "stage": 0, "row": 1, "tag": "AMQP 5672" },
+    { "id": "postgres",     "type": "database",  "label": "PostgreSQL 16",   "sublabel": "banking-db :5432",  "stage": 0, "row": 2, "tag": "bankdb" },
+    { "id": "logstash",     "type": "backend",   "label": "Logstash",        "sublabel": "pipeline.conf",     "stage": 1, "row": 0, "tag": "parse + enrich" },
+    { "id": "es",           "type": "database",  "label": "Elasticsearch",   "sublabel": "japp-es :9200",     "stage": 1, "row": 1, "tag": "index pattern" },
+    { "id": "kibana",       "type": "frontend",  "label": "Kibana",          "sublabel": ":5601 Alert Webhook","stage": 1, "row": 2, "tag": "Webhook" },
+    { "id": "extractor",    "type": "backend",   "label": "extractor.py",    "sublabel": "scroll + filter",   "stage": 2, "row": 0, "tag": "spike_service" },
+    { "id": "instana",      "type": "cloud",     "label": "Instana SaaS",    "sublabel": "events / metrics",  "stage": 2, "row": 2, "tag": "REST API" },
+    { "id": "preprocessor", "type": "backend",   "label": "preprocessor.py", "sublabel": "trace_id grouping", "stage": 3, "row": 0 },
+    { "id": "bob_cli",      "type": "external",  "label": "Bob CLI",         "sublabel": "log-analyst mode",  "stage": 3, "row": 1, "tag": "max-turns 5" },
+    { "id": "report_bld",   "type": "backend",   "label": "report_builder",  "sublabel": "PPTX 生成",         "stage": 3, "row": 2 },
+    { "id": "sqlite_db",    "type": "database",  "label": "SQLite DB",       "sublabel": "/db/history.db",    "stage": 4, "row": 0 },
+    { "id": "pptx_out",     "type": "database",  "label": "PPTX 報告",       "sublabel": "/reports/",         "stage": 4, "row": 1 },
+    { "id": "grafana",      "type": "frontend",  "label": "Grafana",         "sublabel": "Infinity datasource","stage": 4, "row": 2, "tag": "job history" }
+  ],
+  "flows": [
+    { "id": "app-logs",        "from": "banking_app", "to": "logstash",    "label": "app logs",          "variant": "default" },
+    { "id": "mq-logs",         "from": "artemis",     "to": "logstash",    "label": "MQ logs",           "variant": "default" },
+    { "id": "db-logs",         "from": "postgres",    "to": "logstash",    "label": "DB logs",           "variant": "default" },
+    { "id": "logstash-es",     "from": "logstash",    "to": "es",          "label": "indexed docs",      "variant": "emphasis" },
+    { "id": "kibana-es",       "from": "kibana",      "to": "es",          "label": "Agg query",         "variant": "dashed" },
+    { "id": "kibana-webhook",  "from": "kibana",      "to": "extractor",   "label": "Webhook + es_agg",  "variant": "security", "classification": "Kibana Alert Webhook 含 es_agg_summary" },
+    { "id": "extractor-es",    "from": "extractor",   "to": "es",          "label": "scroll query",      "variant": "emphasis" },
+    { "id": "instana-extractor","from": "instana",    "to": "extractor",   "label": "instana_context",   "variant": "security", "classification": "triggered by *_instana" },
+    { "id": "extractor-pre",   "from": "extractor",   "to": "preprocessor","label": "raw_logs",          "variant": "emphasis" },
+    { "id": "pre-bob",         "from": "preprocessor","to": "bob_cli",     "label": "event_sequence JSON","variant": "emphasis" },
+    { "id": "bob-report",      "from": "bob_cli",     "to": "report_bld",  "label": "analysis dict",     "variant": "emphasis" },
+    { "id": "instana-report",  "from": "instana",     "to": "report_bld",  "label": "instana_context",   "variant": "security", "classification": "Instana Slide 3.5 注入" },
+    { "id": "report-sqlite",   "from": "report_bld",  "to": "sqlite_db",   "label": "complete_job()",    "variant": "default" },
+    { "id": "report-pptx",     "from": "report_bld",  "to": "pptx_out",    "label": "PPTX write",        "variant": "dashed" },
+    { "id": "sqlite-grafana",  "from": "sqlite_db",   "to": "grafana",     "label": "Infinity JSON",     "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "主要資料路徑", "items": ["banking-app 內嵌 Artemis MQ（bankingQueue）：HTTP → MDB → JDBC → PostgreSQL", "應用日誌（Liberty / Artemis / PG）→ Logstash → ES → extractor → preprocessor → Bob CLI", "Bob 分析結果 → report_builder → PPTX + SQLite"] },
+    { "dot": "rose",    "title": "Kibana 精準三層限縮", "items": ["Layer 1: event_time 中心視窗 ±5/2 分鐘", "Layer 2: spike_service ES terms filter（extractor）", "Layer 3: es_agg_summary 直接注入 event_sequence 頂層"] },
+    { "dot": "violet",  "title": "Instana 遙測補強", "items": ["Events / Endpoint Metrics / Trace Summary 與 ELK 日誌交叉比對", "JVM heap / GC / Artemis 積壓數注入 infra_metrics", "失敗時降級為純 ELK 模式（available=false）"] }
+  ]
+}

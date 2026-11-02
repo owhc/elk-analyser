@@ -11,7 +11,7 @@
 #   podman-compose up -d
 #
 # ── 首次 PostgreSQL schema 初始化（容器啟動時自動載入）────────────
-#   podman exec banking-db psql -U db2inst1 -d bankdb -f /docker-entrypoint-initdb.d/01-schema.sql
+#   podman exec banking-db psql -U bankuser -d bankdb -f /docker-entrypoint-initdb.d/01-schema.sql
 #
 # ── 服務清單 ───────────────────────────────────────────────────────
 #   elk-analyser-web  :3001  — 統一 Gateway 入口（/grafana/, /web/, /api/）
@@ -182,8 +182,8 @@ services:
       DB_HOST: banking-db
       DB_PORT: 5432                    # PostgreSQL 容器內部 port（主機端 50000 映射至此）
       DB_NAME: ${DB_NAME:-bankdb}      # PostgreSQL 資料庫名稱（小寫）
-      DB_USER: ${DB_USER:-db2inst1}
-      DB_PASS: ${DB_PASS:-db2admin123}
+      DB_USER: ${DB_USER:-bankuser}
+      DB_PASS: ${DB_PASS:-bankpassword}
       MQ_HOST: localhost
       MQ_PORT: ${ARTEMIS_PORT:-5672}
       MQ_USER: ${ARTEMIS_USER:-admin}
@@ -217,8 +217,8 @@ services:
       - app_logs:/logs:z
     environment:
       POSTGRES_DB: ${DB_NAME:-bankdb}
-      POSTGRES_USER: ${DB_USER:-db2inst1}
-      POSTGRES_PASSWORD: ${DB_PASS:-db2admin123}
+      POSTGRES_USER: ${DB_USER:-bankuser}
+      POSTGRES_PASSWORD: ${DB_PASS:-bankpassword}
       TZ: ${TZ:-Asia/Taipei}
     # 先以 root 建立並授權共享日誌目錄，再交由官方 entrypoint 降權啟動 PostgreSQL。
     entrypoint:
@@ -237,7 +237,7 @@ services:
           -c log_min_messages=info \
           -c log_min_error_statement=error
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-db2inst1} -d ${DB_NAME:-bankdb}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-bankuser} -d ${DB_NAME:-bankdb}"]
       interval: 10s
       timeout: 5s
       retries: 10

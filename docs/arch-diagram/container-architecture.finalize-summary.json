@@ -1,0 +1,291 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/ochen/dev/elk-analyser/.archify/architecture-container-20261020-222209/candidate.json",
+    "sha256": "8e309dc98cd716a942adc69277986af86ba5d428ea526d1c4a318eeb63fb6e48",
+    "bytes": 4941
+  },
+  "artifact": {
+    "path": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/container-architecture.html",
+    "sha256": "2d243177d7fb4677ec521b85b040ac9191cc1f492c15a20f184a6b2dbf6bc27c",
+    "bytes": 833146
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/container-architecture.finalize.json",
+    "summaryReceipt": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/container-architecture.finalize-summary.json",
+    "browserCheckReceipt": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/container-architecture.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-20T13:41:55.365Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2074,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  },
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "resolvedCrossovers": 8,
+      "routesOverSuggestedBends": 2,
+      "routesOverSuggestedStretch": 1
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [
+        {
+          "left": {
+            "id": "analyser-es",
+            "from": "analyser",
+            "to": "es",
+            "label": "ES scroll",
+            "collectionIndex": 2,
+            "artifactIndex": 3
+          },
+          "right": {
+            "id": "agent-instana",
+            "from": "instana_agent",
+            "to": "instana_saas",
+            "label": "agent telemetry",
+            "collectionIndex": 4,
+            "artifactIndex": 5
+          },
+          "point": [
+            600.0000000000001,
+            207.99999999999997
+          ]
+        },
+        {
+          "left": {
+            "id": "analyser-instana",
+            "from": "analyser",
+            "to": "instana_saas",
+            "label": "REST collect()",
+            "collectionIndex": 3,
+            "artifactIndex": 4
+          },
+          "right": {
+            "id": "agent-instana",
+            "from": "instana_agent",
+            "to": "instana_saas",
+            "label": "agent telemetry",
+            "collectionIndex": 4,
+            "artifactIndex": 5
+          },
+          "point": [
+            600.0000000000001,
+            216
+          ],
+          "sharedNode": "instana_saas"
+        },
+        {
+          "left": {
+            "id": "analyser-instana",
+            "from": "analyser",
+            "to": "instana_saas",
+            "label": "REST collect()",
+            "collectionIndex": 3,
+            "artifactIndex": 4
+          },
+          "right": {
+            "id": "logstash-es",
+            "from": "logstash",
+            "to": "es",
+            "label": "indexed docs",
+            "collectionIndex": 8,
+            "artifactIndex": 9
+          },
+          "point": [
+            879.9999999999999,
+            215.99999999999997
+          ]
+        },
+        {
+          "left": {
+            "id": "analyser-instana",
+            "from": "analyser",
+            "to": "instana_saas",
+            "label": "REST collect()",
+            "collectionIndex": 3,
+            "artifactIndex": 4
+          },
+          "right": {
+            "id": "kibana-es",
+            "from": "kibana",
+            "to": "es",
+            "label": "ES HTTP",
+            "collectionIndex": 9,
+            "artifactIndex": 10
+          },
+          "point": [
+            797,
+            216
+          ]
+        },
+        {
+          "left": {
+            "id": "agent-instana",
+            "from": "instana_agent",
+            "to": "instana_saas",
+            "label": "agent telemetry",
+            "collectionIndex": 4,
+            "artifactIndex": 5
+          },
+          "right": {
+            "id": "logstash-es",
+            "from": "logstash",
+            "to": "es",
+            "label": "indexed docs",
+            "collectionIndex": 8,
+            "artifactIndex": 9
+          },
+          "point": [
+            880,
+            234.94999999999996
+          ]
+        },
+        {
+          "left": {
+            "id": "agent-instana",
+            "from": "instana_agent",
+            "to": "instana_saas",
+            "label": "agent telemetry",
+            "collectionIndex": 4,
+            "artifactIndex": 5
+          },
+          "right": {
+            "id": "kibana-es",
+            "from": "kibana",
+            "to": "es",
+            "label": "ES HTTP",
+            "collectionIndex": 9,
+            "artifactIndex": 10
+          },
+          "point": [
+            797,
+            234.9499999999999
+          ]
+        },
+        {
+          "left": {
+            "id": "app-logstash",
+            "from": "banking_app",
+            "to": "logstash",
+            "label": "app_logs vol",
+            "collectionIndex": 6,
+            "artifactIndex": 7
+          },
+          "right": {
+            "id": "kibana-es",
+            "from": "kibana",
+            "to": "es",
+            "label": "ES HTTP",
+            "collectionIndex": 9,
+            "artifactIndex": 10
+          },
+          "point": [
+            797.0000000000001,
+            268
+          ]
+        },
+        {
+          "left": {
+            "id": "db-logstash",
+            "from": "banking_db",
+            "to": "logstash",
+            "label": "pg logs vol",
+            "collectionIndex": 7,
+            "artifactIndex": 8
+          },
+          "right": {
+            "id": "kibana-es",
+            "from": "kibana",
+            "to": "es",
+            "label": "ES HTTP",
+            "collectionIndex": 9,
+            "artifactIndex": 10
+          },
+          "point": [
+            797,
+            395
+          ]
+        }
+      ],
+      "detours": [
+        {
+          "relationship": {
+            "id": "agent-instana",
+            "from": "instana_agent",
+            "to": "instana_saas",
+            "label": "agent telemetry",
+            "collectionIndex": 4,
+            "artifactIndex": 5
+          },
+          "bends": 3,
+          "stretch": 1
+        },
+        {
+          "relationship": {
+            "id": "kibana-es",
+            "from": "kibana",
+            "to": "es",
+            "label": "ES HTTP",
+            "collectionIndex": 9,
+            "artifactIndex": 10
+          },
+          "bends": 4,
+          "stretch": 1.546,
+          "directCorridorBlockers": [
+            {
+              "id": "logstash",
+              "label": "japp-logstash",
+              "box": [
+                800,
+                360,
+                160,
+                56
+              ]
+            }
+          ]
+        }
+      ],
+      "truncated": false
+    },
+    "hints": [
+      "analyser has 3 relationships facing its right side, which fits 2 ports: make that side at least 60px, or move some of those neighbours so they face another side of analyser.",
+      "analyser → es crosses instana_agent → instana_saas: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "analyser → instana_saas and instana_agent → instana_saas cross next to instana_saas: move node analyser or instana_agent so the two reach instana_saas from different sides (for example one level with it, one directly above or below it).",
+      "analyser → instana_saas crosses logstash → es: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "analyser → instana_saas crosses kibana → es: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "instana_agent → instana_saas crosses logstash → es: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "instana_agent → instana_saas crosses kibana → es: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "banking_app → logstash crosses kibana → es: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor."
+    ],
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}

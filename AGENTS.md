@@ -25,7 +25,7 @@
 ```bash
 # Start Stack (含 Grafana + Provisioning)
 bash scripts/setup-instana.sh && podman-compose -f podman-compose.yml -f podman-compose.override.yml up -d
-podman exec -it banking-db psql -U db2inst1 -d bankdb -c "GRANT pg_monitor TO db2inst1;"
+podman exec -it banking-db psql -U bankuser -d bankdb -c "GRANT pg_monitor TO bankuser;"
 # Access Unified Port 3001
 # - Grafana Dashboard: http://localhost:3001/grafana/ (首頁自動導向)
 # - Standby Web UI:    http://localhost:3001/web/

@@ -100,8 +100,8 @@ ENV MQ_PASS=admin123
 ENV DB_HOST=banking-db
 ENV DB_PORT=5432
 ENV DB_NAME=bankdb
-ENV DB_USER=db2inst1
-ENV DB_PASS=db2admin123
+ENV DB_USER=bankuser
+ENV DB_PASS=bankpassword
 
 # Liberty logging
 ENV WLP_LOGGING_CONSOLE_FORMAT=json

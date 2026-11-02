@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "6bd9bb45-3878-4230-b37d-251de3be285e",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/Users/ochen/dev/elk-analyser/.archify/workflow-analysis-20261020-222209/candidate.json",
+  "output": "/Users/ochen/dev/elk-analyser/docs/arch-diagram/analysis-workflow.html",
+  "specification": {
+    "sha256": "59b3c0c12da7278311f1467f18e07eb2dba1fb75809060e08e1aaaca4d89497a",
+    "bytes": 6589
+  },
+  "artifact": {
+    "sha256": "47dcbd965b8e5c3afcfa3b653df7d7ffbad83dbef583beedbe764476f33c22ab",
+    "bytes": 841151
+  }
+}
