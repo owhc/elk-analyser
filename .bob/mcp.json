@@ -16,7 +16,7 @@
     },
     "bob-marketplace": {
       "type": "streamable-http",
-      "url": "http://127.0.0.1:54815/mcp",
+      "url": "http://127.0.0.1:39247/mcp",
       "headers": {
         "Bob-Marketplace-Token": "bob-marketplace-local"
       },

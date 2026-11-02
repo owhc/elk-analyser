@@ -199,7 +199,8 @@ services:
       japp-network:
         ipv4_address: 10.89.2.20
     depends_on:
-      - banking-db
+      banking-db:
+        condition: service_healthy   # db entrypoint 會先建立 /logs/{liberty,artemis}
 
   # ── PostgreSQL 16 ───────────────────────────────────────────────
   # 使用 postgres:16-alpine，schema 見 postgres-config/schema-postgres.sql
@@ -225,8 +226,11 @@ services:
       - /bin/sh
       - -c
       - |
-        mkdir -p /logs/postgres
+        mkdir -p /logs/postgres /logs/liberty /logs/artemis
         chown postgres:postgres /logs/postgres
+        # banking-app 以 uid 1001 執行，無權自行建立目錄；volume 首次被本容器掛載時為空，需在此建立
+        chown 1001:0 /logs/liberty /logs/artemis
+        chmod 775 /logs/liberty /logs/artemis
         exec docker-entrypoint.sh postgres \
           -c logging_collector=on \
           -c log_destination=stderr \

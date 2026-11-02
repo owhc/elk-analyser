@@ -1,4 +1,4 @@
-# Updated: 2026-09-17 15:13:26 +0800
+# Updated: 2026-11-02 22:05:00 +0800
 """
 api.py
 ──────
@@ -13,7 +13,7 @@ REST API 入口（FastAPI）。
   DELETE /jobs           批次刪除多筆任務（body: {"ids": [1,2,3]}）
   GET  /jobs/{id}/report 下載 PPTX 報告檔
   GET  /jobs/{id}/status 輪詢任務執行狀態（供非同步模式使用）
-  POST /demo/inject      注入 WAS/MQ/PostgreSQL Demo 模擬資料
+  POST /demo/inject      注入 Liberty/Artemis/PostgreSQL Demo 模擬資料
   GET  /health           健康檢查
 """
 
@@ -193,7 +193,7 @@ class DemoInjectRequest(BaseModel):
         _fmt = "%Y-%m-%d %H:%M"
         if self.to_time and self.from_time:
             return self.from_time, self.to_time
-        now = datetime.now(timezone.utc)
+        now = datetime.now(_LOCAL_TZ)   # 與 _parse_time 對 naive 字串的解讀一致
         to   = self.to_time   or now.strftime(_fmt)
         frm  = self.from_time or (now - timedelta(hours=1)).strftime(_fmt)
         return frm, to
@@ -759,7 +759,7 @@ def job_status(job_id: int):
 @app.post("/demo/inject")
 def demo_inject(req: DemoInjectRequest):
     """
-    注入 WAS/MQ/PostgreSQL Demo 模擬資料。
+    注入 Liberty/Artemis/PostgreSQL Demo 模擬資料。
     兩段式執行（F-10）：
       1. 同步：呼叫 gen_fake_data.py --no-trigger 純寫入資料（快速，不阻塞 worker）
       2. 若 trigger_analyse=True，enqueue 分析任務（非同步排隊執行）
@@ -800,7 +800,7 @@ def demo_inject(req: DemoInjectRequest):
 
     return {
         "status": "ok",
-        "message": f"已注入 WAS/MQ/PostgreSQL Demo 資料（{from_str} → {to_str}）",
+        "message": f"已注入 Liberty/Artemis/PostgreSQL Demo 資料（{from_str} → {to_str}）",
         "triggered": req.trigger_analyse,
         "note": "分析已在背景執行，請透過 GET /jobs 查詢結果" if req.trigger_analyse else "僅注入資料，未觸發分析",
         "log": result.stdout[-1000:],

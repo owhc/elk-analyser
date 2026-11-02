@@ -1,4 +1,4 @@
-# Updated: 2026-09-15 22:10:08 +0800
+# Updated: 2026-11-02 22:00:00 +0800
 """
 analyser/report_builder.py
 ──────────────────────────
@@ -74,6 +74,18 @@ def build_report(
     except Exception as exc:
         logger.error("報告生成失敗：%s", exc)
         return {"error": str(exc)}
+
+
+def _normalize_chain(chain: dict) -> dict:
+    """Bob 偶爾把文字欄位回成 list（如 short_term_fix），統一轉為字串避免 python-pptx 寫入失敗。"""
+    out = dict(chain)
+    for key in ("title", "root_cause", "short_term_fix", "long_term_fix", "severity"):
+        val = out.get(key)
+        if isinstance(val, (list, tuple)):
+            out[key] = "；".join(str(v) for v in val)
+        elif val is not None and not isinstance(val, str):
+            out[key] = str(val)
+    return out
 
 
 def _truncate(value, limit: int) -> str:
@@ -246,7 +258,7 @@ def _build_report(
         W = Inches(13.33)
         H = Inches(7.5)
         summary = analysis.get("summary", {})
-        chains  = analysis.get("event_chains", [])
+        chains  = [_normalize_chain(c) for c in analysis.get("event_chains", []) if isinstance(c, dict)]
         incident = summary.get("incident_status", {})
         impact = summary.get("impact_analysis", {})
         now_dt  = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")

@@ -1,4 +1,4 @@
-<!-- Updated: 2026-09-16 08:06:45 +0800 -->
+<!-- Updated: 2026-11-02 22:42:05 +0800 -->
 # ELK Analyser
 
 自動化日誌分析與報告生成系統。從 Elasticsearch 提取日誌，透過 Bob CLI AI 進行根因分析，自動產出 Morandi Blue Tech 主題的 PPTX 診斷報告。支援 Instana APM 整合，實現 ELK + APM 聯合可觀測性診斷。
@@ -36,34 +36,80 @@ SQLite（/db/history.db — 任務歷史 + Checkpoint）
 
 ## 快速開始
 
+### 0. 前置需求
+
+- Podman + `podman-compose`（Mac 需先 `podman machine start`；建議 ≥ 6 GB RAM，ES + Liberty + Kibana 同時運行）
+- Maven 3.9+ / Java 17+（編譯 Banking WAR 用）
+- 已編譯的 Banking WAR：`japp-demo/banking-app/deploy/banking-app.war`
+
+```bash
+# 確認 WAR 存在；不存在則自動編譯（首次 clone 或程式碼變更後）
+ls japp-demo/banking-app/deploy/banking-app.war 2>/dev/null \
+  || (cd japp-demo/banking-app && mvn clean package -DskipTests \
+      && cp target/banking-app.war deploy/)
+```
+
 ### 1. 環境準備
 
 ```bash
+# ① Bob Analyser 設定（必填）
 cp bob-analyser/.env.example bob-analyser/.env
 # 編輯 bob-analyser/.env，填入：
 #   BOB_API_KEY          — Bob CLI 認證（必填）
 #   INSTANA_API_TOKEN    — Instana REST API 金鑰（啟用 Instana 整合時必填）
+
+# ② banking-app env_file（compose 中 env_file: ./japp-demo/.env 必須存在，否則 up 報錯）
+# 所有變數在 compose 中已有預設值，全新 clone 建立空檔即可
+touch japp-demo/.env
+# 若需自訂端口或密碼，可加入：
+#   TZ=Asia/Taipei
+#   LIBERTY_HTTP_PORT=9080
+#   ARTEMIS_USER=admin
+#   ARTEMIS_PASS=admin123
 ```
 
 ### 2. 啟動 Container（Podman）
 
 ```bash
-# 完整 stack（ELK + Banking Demo + Instana Agent + ELK Analyser）
+# ① 驗證 Instana bootstrap JAR（偵測損壞 JAR，避免 Liberty 無法啟動）
 bash scripts/setup-instana.sh
-podman-compose -f podman-compose.yml -f podman-compose.override.yml up -d
 
-# 或僅啟動 ELK Analyser（使用 mock 模式）
-podman-compose up --build -d
+# ② 完整 stack（ELK + Banking Demo + Instana Agent + ELK Analyser）
+podman-compose -f podman-compose.yml -f podman-compose.override.yml up -d --build
 
-# Web UI:  http://localhost:3001
-# API:     http://localhost:8080
+# 不使用 Instana 時，省略 setup-instana.sh 與 override 檔：
+#   podman-compose up --build -d
+
+# 離線 demo 可將 config.yaml 的 elasticsearch.mode 設為 mock（見「設定說明」）
+
+# ③ 授予 PostgreSQL 監控權限（banking-db healthy 後，Instana 取 DB 指標用，僅需一次）
+podman exec -it banking-db psql -U bankuser -d bankdb -c "GRANT pg_monitor TO bankuser;"
+
+# 統一入口 http://localhost:3001  （自動導向 Grafana；/web/ 為備用 Web UI；/api/ 為 API）
+# API 直連:  http://localhost:8080
+```
+
+啟動順序由 compose 的 `depends_on` 處理：`banking-db` 會先建立共享日誌目錄
+（`/logs/{postgres,liberty,artemis}`），`banking-app` 待 db healthy 後才啟動。
+Instana bootstrap JAR 直接 bind mount 自 `instana-agent-package/`，無需額外下載或建立 volume。
+
+首次啟動請等所有容器 `healthy`（約 2~3 分鐘，`banking-app` 有 120 秒 start_period）：
+
+```bash
+podman ps --format '{{.Names}} {{.Status}}'
+curl http://localhost:8080/health                       # ELK Analyser
+curl http://localhost:9080/banking-app/api/health       # Banking App
 ```
 
 ### 3. 觸發分析（純 ELK）
 
+> **時區**：不帶時區的時間字串（`2026-01-15 08:00`）一律視為容器本地時區（`Asia/Taipei`）。
+> 若要傳 UTC，請用 ISO 格式帶 `Z` 或 `+00:00`，例如 `2026-01-15T00:00:00Z`。
+> 真實 ELK 模式（`mode: local`）只會查到實際存在於 ES 的日誌，窗口需涵蓋 Banking App 的實際運行時間。
+
 ```bash
 # Web UI 手動查詢（含時間選擇器）
-# 開啟 http://localhost:3001
+# 開啟 http://localhost:3001/web/
 
 # CLI（容器內）
 podman exec elk-analyser python cli.py run \
@@ -107,6 +153,10 @@ Instana 整合啟用後，PPTX 報告將包含額外的 **Slide 3.5（APM 診斷
 若 Instana API 不可用，系統自動降級為純 ELK 模式，報告結構不受影響。
 
 ### 5. Demo 資料注入
+
+> `/demo/inject` 與 `gen_fake_data.py` 只寫入 **mock 資料檔**，必須在 `elasticsearch.mode: mock`
+> 下才會被分析讀取；`mode: local` 時請改用下方 `generate-observability-incident.sh`
+> 把事件實際寫入 ES。
 
 ```bash
 # 注入 WAS/MQ/PostgreSQL 模擬事故資料並立即觸發分析（時間窗口動態計算為 now-1h → now）

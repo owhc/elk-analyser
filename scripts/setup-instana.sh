@@ -1,47 +1,25 @@
 #!/usr/bin/env bash
 # Created: 2026-09-03 17:37:42 +0800
-# Updated: 2026-09-15 10:43:17 +0800
-# scripts/setup-instana.sh — Instana Java Agent 一鍵準備腳本
+# Updated: 2026-11-02 21:46:00 +0800
+# scripts/setup-instana.sh — Instana Java Agent 準備腳本
 # ================================================================
 # 執行：bash scripts/setup-instana.sh
+# bootstrap JAR 已隨 repo 提供並由 override 直接 bind mount，
+# 不再下載（舊版下載失敗會把 404 JSON 當 JAR，導致 Liberty 無法啟動）。
 # ================================================================
 set -euo pipefail
 
-AGENT_KEY="uBp4GXpZQpKrHxMXNcvInQ"
-DOWNLOAD_KEY="uBp4GXpZQpKrHxMXNcvInQ"
-ENDPOINT="ingress-orange-saas.instana.io"
-JAR_PATH="$(pwd)/instana-agent.jar"
-VOLUME_NAME="instana-java-agent"
+JAR_PATH="$(dirname "$0")/../instana-agent-package/instana-javaagent-bootstrap.jar"
 
-echo "=== [1/4] 下載 Instana Java Trace Agent JAR ==="
-curl -sSLo "${JAR_PATH}" \
-  "https://${ENDPOINT}/downloads/instana-agent.jar" \
-  -H "x-instana-agent-key: ${DOWNLOAD_KEY}" \
-  || {
-    echo "⚠  自動下載失敗（SaaS 端點需登入）"
-    echo "   請手動前往 Instana UI → More > Agents > Install Agent > Java"
-    echo "   下載 instana-agent.jar 並放置於：${JAR_PATH}"
-    echo "   完成後重新執行此腳本的步驟 2~4"
-    exit 1
-  }
-echo "✓ JAR 下載完成：${JAR_PATH}"
+echo "=== [1/2] 驗證 bootstrap JAR ==="
+if ! unzip -tq "${JAR_PATH}" >/dev/null 2>&1; then
+  echo "❌ ${JAR_PATH} 不存在或不是有效 JAR，請 git checkout 還原該檔案" >&2
+  exit 1
+fi
+echo "✓ JAR 有效：${JAR_PATH}"
 
 echo ""
-echo "=== [2/4] 建立 Podman named volume: ${VOLUME_NAME} ==="
-podman volume create "${VOLUME_NAME}" 2>/dev/null \
-  && echo "✓ volume 已建立" \
-  || echo "✓ volume 已存在，跳過"
-
-echo ""
-echo "=== [3/4] 將 JAR 複製至 volume ==="
-podman run --rm \
-  -v "${VOLUME_NAME}:/opt/instana-agent" \
-  -v "${JAR_PATH}:/tmp/instana-agent.jar:ro" \
-  busybox cp /tmp/instana-agent.jar /opt/instana-agent/instana-agent.jar
-echo "✓ JAR 已放入 volume ${VOLUME_NAME}"
-
-echo ""
-echo "=== [4/4] 授予 PostgreSQL pg_monitor role ==="
+echo "=== [2/2] 授予 PostgreSQL pg_monitor role ==="
 echo "   （需等 banking-db 容器啟動後執行）"
 echo "   指令：podman exec -it banking-db psql -U bankuser -d bankdb -c \"GRANT pg_monitor TO bankuser;\""
 

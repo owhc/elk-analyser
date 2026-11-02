@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Updated: 2026-11-02 21:57:00 +0800
 # Created: 2026-09-15 20:48:46 +0800
 # 產生可由 Instana 觀測的 Java App 錯誤，注入同時間窗 ELK 事件，再觸發 PPTX 分析。
 # 用法：scripts/generate-observability-incident.sh [錯誤請求次數]
@@ -47,8 +48,8 @@ require_service "ELK Analyser" "${ANALYSER_URL}/health"
 incident_id="OBS-$(date -u '+%Y%m%dT%H%M%SZ')"
 from_iso="$(utc_time '-1M')"
 to_iso="$(utc_time '+2M')"
-from_api="$(date -u -v-1M '+%Y-%m-%d %H:%M')"
-to_api="$(date -u -v+2M '+%Y-%m-%d %H:%M')"
+from_api="$from_iso"
+to_api="$to_iso"
 index_name="banking-logs-synthetic-$(date -u '+%Y.%m.%d')"
 
 printf '事件 %s，分析視窗 %s → %s\n' "$incident_id" "$from_iso" "$to_iso"
