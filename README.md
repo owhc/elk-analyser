@@ -59,13 +59,11 @@ cp bob-analyser/.env.example bob-analyser/.env
 #   INSTANA_API_TOKEN    — Instana REST API 金鑰（啟用 Instana 整合時必填）
 
 # ② banking-app env_file（compose 中 env_file: ./japp-demo/.env 必須存在，否則 up 報錯）
-# 所有變數在 compose 中已有預設值，全新 clone 建立空檔即可
-touch japp-demo/.env
-# 若需自訂端口或密碼，可加入：
-#   TZ=Asia/Taipei
-#   LIBERTY_HTTP_PORT=9080
-#   ARTEMIS_USER=admin
-#   ARTEMIS_PASS=admin123
+# 所有變數在 compose 中已有預設值，直接複製範本即可（內容皆為預設值，不改也能啟動）
+cp japp-demo/.env.example japp-demo/.env
+# 注意：japp-demo/.env 只會注入 banking-app 容器；compose 的 ${VAR:-default} 插值
+# （端口映射、DB_PASS、ARTEMIS_PASS 等）只讀 shell 環境或專案根目錄的 .env。
+# 要改端口/密碼，請在啟動前 export，或寫入專案根目錄 .env。
 ```
 
 ### 2. 啟動 Container（Podman）
@@ -82,8 +80,9 @@ podman-compose -f podman-compose.yml -f podman-compose.override.yml up -d --buil
 
 # 離線 demo 可將 config.yaml 的 elasticsearch.mode 設為 mock（見「設定說明」）
 
-# ③ 授予 PostgreSQL 監控權限（banking-db healthy 後，Instana 取 DB 指標用，僅需一次）
-podman exec -it banking-db psql -U bankuser -d bankdb -c "GRANT pg_monitor TO bankuser;"
+# ③ pg_monitor 權限：全新 db_data volume 首次啟動時由 02-grant-pg-monitor.sh 自動授予。
+#    僅在沿用「既有」db_data volume 時才需手動執行一次：
+#    podman exec banking-db psql -U bankuser -d bankdb -c "GRANT pg_monitor TO bankuser;"
 
 # 統一入口 http://localhost:3001  （自動導向 Grafana；/web/ 為備用 Web UI；/api/ 為 API）
 # API 直連:  http://localhost:8080

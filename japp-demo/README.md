@@ -90,14 +90,15 @@ podman network ls | grep japp-network
 
 ### 步驟 3：設定環境變數（選用）
 
-預設值已在 `podman-compose.yml` 的 `${VAR:-default}` 中設定，無需另建 `.env`。
-如需自訂，複製範本：
+`podman-compose.yml` 的 `banking-app` 以 `env_file: ./japp-demo/.env` 注入環境變數，**該檔必須存在**，否則 `up` 會報錯。
+複製範本 [`.env.example`](.env.example)（內容皆為預設值）：
 
 ```bash
-# 目前無獨立 .env 範本；直接編輯以下變數或 export
-export DB_PASS=your-secure-password
-export ARTEMIS_PASS=your-mq-password
+cp japp-demo/.env.example japp-demo/.env
 ```
+
+端口映射與 `${VAR:-default}` 插值只讀 shell 環境或專案根目錄 `.env`；
+要改端口/密碼請在啟動前 `export`，或寫入專案根目錄 `.env`。
 
 主要可設定變數：
 

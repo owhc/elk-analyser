@@ -19,9 +19,9 @@ fi
 echo "✓ JAR 有效：${JAR_PATH}"
 
 echo ""
-echo "=== [2/2] 授予 PostgreSQL pg_monitor role ==="
-echo "   （需等 banking-db 容器啟動後執行）"
-echo "   指令：podman exec -it banking-db psql -U bankuser -d bankdb -c \"GRANT pg_monitor TO bankuser;\""
+echo "=== [2/2] PostgreSQL pg_monitor role ==="
+echo "   全新 db_data volume 首次啟動會由 02-grant-pg-monitor.sh 自動授予。"
+echo "   沿用既有 volume 時才需手動：podman exec banking-db psql -U bankuser -d bankdb -c \"GRANT pg_monitor TO bankuser;\""
 
 echo ""
 echo "========================================================"

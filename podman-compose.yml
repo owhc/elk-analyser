@@ -215,6 +215,8 @@ services:
       - db_data:/var/lib/postgresql/data:z
       # postgres image 啟動時自動執行 /docker-entrypoint-initdb.d/*.sql
       - ./japp-demo/container-japp/postgres-config/schema-postgres.sql:/docker-entrypoint-initdb.d/01-schema.sql:z
+      # 首次初始化時自動 GRANT pg_monitor（Instana 取 DB 指標用）
+      - ./japp-demo/container-japp/postgres-config/02-grant-pg-monitor.sh:/docker-entrypoint-initdb.d/02-grant-pg-monitor.sh:z
       - app_logs:/logs:z
     environment:
       POSTGRES_DB: ${DB_NAME:-bankdb}
