@@ -1,5 +1,5 @@
 <!-- Created: 2026-09-16 08:19:29 +0800 -->
-<!-- Updated: 2026-09-16 08:21:35 +0800 -->
+<!-- Updated: 2026-11-03 10:23:58 +0800 -->
 # Web UI 操作情境與使用指南
 
 本文檔針對 `ELK Analyser Dashboard` 前端 Web UI（預設入口：`http://localhost:3001`）提供端到端的使用者操作情境、畫面功能說明與操作步驟指南。
@@ -20,6 +20,7 @@ ELK Analyser 提供沉浸式深色 Morandi 科技風儀表板，主要區分為�
 │ 服務健康檢查 (Service Health)     │ 隨選分析面板 (On-Demand Analysis) │
 │ • ELK Analyser API (連線與延遲 ms)│ • 開始時間 (datetime-local)        │
 │                                   │ • 結束時間 (datetime-local)        │
+│                                   │ • Demo 故障場景 (A/B/C/D/純 ELK)   │
 │                                   │ [▶ 立即分析]                      │
 │                                   │ [⚡ ELK + Instana 合併分析]        │
 │                                   │ [注入 Demo 資料]                  │
@@ -50,12 +51,23 @@ ELK Analyser 提供沉浸式深色 Morandi 科技風儀表板，主要區分為�
 ---
 
 ### 情境 B：快速注入展示資料並驗證管線（One-Click Demo Injection）
-- **目標**：在無真實線上異常時，快速注入模擬故障日誌並觸發端到端分析。
+- **目標**：在無真實線上異常時，快速注入模擬故障日誌，並以「Instana + Log」做端到端根因分析。
+- **運作方式**：選定場景後，系統模擬 Kibana Alert 觸發，取事故時間點（`event_time`）前 5 分／後 2 分的 log，並帶入該場景**模擬的 Instana 資料**（events / endpoint metrics / trace summary / JVM / Artemis）交給 Bob 對照分析；**不會呼叫真實 Instana API**。
 - **操作步驟**：
-  1. 在 **隨選分析面板** 中，可選擇自訂時間，或直接留空（預設會代入 `2026-01-15 08:00` 至 `09:00` 示範視窗）。
-  2. 點擊按鈕 **`注入 Demo 資料`**。
-  3. 觀察按鈕狀態變為 `注入中…`，下方出現即時反饋文字：`Demo 資料注入完成，分析已觸發`。
-  4. 任務列表會自動重新整理，新增一筆任務並即時呈現分析完成狀態。
+  1. 在 **隨選分析面板** 中，可選擇自訂時間，或直接留空（預設會代入 `2026-01-15 08:00` 至 `09:00` 示範視窗；log 以「開始時間」為基準產生）。
+  2. 於 **Demo 故障場景** 下拉選單選擇情境（預設 A）：
+     - `A`：PostgreSQL 連線數耗盡
+     - `B`：Liberty JVM 記憶體洩漏
+     - `C`：來源帳號不存在（FK 違反）
+     - `D`：PostgreSQL 磁碟滿
+     - `純 ELK`：不含 Instana，分析整段 `from~to`（舊行為）
+  3. 點擊按鈕 **`注入 Demo 資料`**。
+  4. 觀察按鈕狀態變為 `注入中…`，下方出現即時反饋文字：`Demo 資料注入完成（場景 X），Instana + Log 根因分析已觸發`。
+  5. 任務列表會自動重新整理，新增一筆任務（觸發模式 `kibana_alert`）；完成後下載的報告含 **Instana APM 概覽** 頁。
+- **注意**：
+  - 選擇場景時只分析該場景約 7 分鐘的事故視窗，要看其他場景請切換後再按一次。
+  - 同一視窗 5 分鐘內重複注入同場景會各建立一筆新任務（`/demo/inject` 不做去重）。
+  - 需 `elasticsearch.mode` 為 `local` / `remote`；`mock` 模式讀不到注入的 ES 索引。
 
 ---
 
@@ -134,7 +146,7 @@ ELK Analyser 提供沉浸式深色 Morandi 科技風儀表板，主要區分為�
 | 服務健康狀態檢測 | `/api/health` | `GET` | 取得 API 與核心組件健康度 |
 | 點擊「立即分析」 | `/api/analyse` | `POST` | 傳入 `from_time` 與 `to_time` |
 | 點擊「ELK + Instana 合併分析」 | `/api/analyse` | `POST` | 傳入 `trigger: "webui_instana"` |
-| 點擊「注入 Demo 資料」 | `/api/demo/inject` | `POST` | 傳入 `trigger_analyse: true` |
+| 點擊「注入 Demo 資料」 | `/api/demo/inject` | `POST` | 傳入 `trigger_analyse: true` 與 `scenario`（`A`~`D`；空字串＝純 ELK） |
 | 點擊任務列開啟詳情 | `/api/jobs/{id}` | `GET` | 取得該任務完整 JSON 診斷資料 |
 | 點擊「下載」報告 | `/api/jobs/{id}/report` | `GET` | 下載產出之 PPTX 簡報檔案 |
 | 批次「刪除所選」 | `/api/jobs` | `DELETE` | 批次或單筆刪除歷史紀錄 |

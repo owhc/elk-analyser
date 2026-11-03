@@ -1,4 +1,4 @@
-# Updated: 2026-11-02 22:05:00 +0800
+# Updated: 2026-11-03 10:18:43 +0800
 """
 api.py
 ──────
@@ -187,6 +187,9 @@ class DemoInjectRequest(BaseModel):
     from_time: Optional[str] = None   # None = 動態計算 now - 1h
     to_time:   Optional[str] = None   # None = 動態計算 now
     trigger_analyse: bool = True       # 注入後是否立即觸發分析
+    # 故障場景 A~D：模擬 Kibana Alert（event_time 精準視窗）+ 模擬 Instana 資料做 Instana+Log 根因分析；
+    # 空字串 / None = 舊行為（整段 from~to、純 ELK）
+    scenario: Optional[str] = "A"
 
     def resolved_window(self) -> tuple[str, str]:
         """回傳最終使用的時間窗口（字串格式 YYYY-MM-DD HH:MM）。"""
@@ -769,6 +772,15 @@ def demo_inject(req: DemoInjectRequest):
     # 解析最終時間窗口（動態或明確傳入）
     from_str, to_str = req.resolved_window()
 
+    # 場景驗證（早於資料注入，避免寫入後才失敗）
+    import gen_fake_data
+    scenario = (req.scenario or "").strip().upper()
+    if scenario and scenario not in gen_fake_data._SCENARIO_ALERTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"未知場景 {req.scenario!r}，可用：{', '.join(gen_fake_data._SCENARIO_ALERTS)}",
+        )
+
     # ── Step 1：純資料注入（--no-trigger，只寫檔案，秒級完成）──────────
     try:
         inject_cmd = [
@@ -792,7 +804,17 @@ def demo_inject(req: DemoInjectRequest):
 
     # ── Step 2：若需要，非同步觸發分析（enqueue，不阻塞當前請求）─────
     if req.trigger_analyse:
-        analyse_req = AnalyseRequest(from_time=from_str, to_time=to_str)
+        if scenario:
+            # 模擬 Kibana Alert：event_time + es_agg_summary + 模擬 instana_context
+            # （trigger=kibana_alert，不走真實 Instana collector）
+            base_dt = _parse_time(from_str)
+            if base_dt is None:
+                raise HTTPException(status_code=400, detail=f"無法解析 from_time：{from_str}")
+            payload = gen_fake_data._build_alert_payload(
+                scenario, base_dt, gen_fake_data._build_logs(base_dt))
+            analyse_req = AnalyseRequest(**payload)
+        else:
+            analyse_req = AnalyseRequest(from_time=from_str, to_time=to_str)
         qf, qt = _resolve_query_window(analyse_req)
         trigger_mode = _resolve_trigger_mode(analyse_req.trigger, async_mode=True)
         row_id = _repo().create_job(trigger_mode, qf, qt)

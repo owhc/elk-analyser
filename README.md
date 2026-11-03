@@ -1,4 +1,4 @@
-<!-- Updated: 2026-11-02 22:42:05 +0800 -->
+<!-- Updated: 2026-11-03 10:23:58 +0800 -->
 # ELK Analyser
 
 自動化日誌分析與報告生成系統。從 Elasticsearch 提取日誌，透過 Bob CLI AI 進行根因分析，自動產出 Morandi Blue Tech 主題的 PPTX 診斷報告。支援 Instana APM 整合，實現 ELK + APM 聯合可觀測性診斷。
@@ -153,20 +153,42 @@ Instana 整合啟用後，PPTX 報告將包含額外的 **Slide 3.5（APM 診斷
 
 ### 5. Demo 資料注入
 
-> `/demo/inject` 與 `gen_fake_data.py` 只寫入 **mock 資料檔**，必須在 `elasticsearch.mode: mock`
-> 下才會被分析讀取；`mode: local` 時請改用下方 `generate-observability-incident.sh`
-> 把事件實際寫入 ES。
+> `/demo/inject` 與 `gen_fake_data.py` 會把模擬日誌以 bulk 寫入 Elasticsearch 專用索引
+> `banking-logs-fake-demo`（每次先刪除再重建），須使用 `elasticsearch.mode: local` / `remote`
+> 才會被分析讀取（`mode: mock` 只讀 `mock/sample_logs.json`，不會讀到此索引）。
+
+`/demo/inject` 支援四個故障場景（`scenario`，預設 `A`），用來模擬
+**「Kibana Alert 觸發 → 取事故時間點 → 以該時間點前後的 log 對照同區間 Instana 資料做根因分析」**：
+
+| scenario | 故障 | Instana 模擬資料重點 |
+|---|---|---|
+| `A` | PostgreSQL 連線數耗盡 → JDBC 連線池逾時 → Artemis 積壓 | PG p95 約 30s、JVM 正常 → 指向 DB 連線數 |
+| `B` | Liberty JVM 記憶體洩漏 → GC 過載 | heap 接近 `-Xmx512m`、GC 暫停長、PG 錯誤率低 → 指向 JVM |
+| `C` | 來源帳號不存在 → FK 違反 → MDB rollback | 延遲低、少量約束違反 → 指向不合法請求 |
+| `D` | PostgreSQL 磁碟滿 → WAL 無法寫入 | PG 錯誤率 100% → 指向磁碟耗盡 |
+
+指定場景時，後端會以 `trigger=kibana_alert`、`event_time`（精準視窗：事故點前 5 分／後 2 分）、
+`es_agg_summary` 與**模擬的 `instana_context`** 送入分析（不會呼叫真實 Instana API），
+報告會包含 Instana APM 概覽頁。模擬 Instana 事件刻意早於第一筆 log，以呈現「Instana 先偵測、log 隨後出現」。
 
 ```bash
-# 注入 WAS/MQ/PostgreSQL 模擬事故資料並立即觸發分析（時間窗口動態計算為 now-1h → now）
+# 注入場景 B 並觸發 Instana + Log 根因分析（時間窗口動態計算為 now-1h → now；log 以 from_time 為基準）
 curl -X POST http://localhost:8080/demo/inject \
   -H "Content-Type: application/json" \
-  -d '{"trigger_analyse":true}'
+  -d '{"scenario":"B","trigger_analyse":true}'
 
-# 指定特定時間窗口
+# 指定特定基準時間
 curl -X POST http://localhost:8080/demo/inject \
   -H "Content-Type: application/json" \
-  -d '{"from_time":"2026-01-15 08:00","to_time":"2026-01-15 09:00","trigger_analyse":true}'
+  -d '{"from_time":"2026-01-15 08:00","to_time":"2026-01-15 09:00","scenario":"A","trigger_analyse":true}'
+
+# 舊行為：整段 from~to、純 ELK（不含 Instana）
+curl -X POST http://localhost:8080/demo/inject \
+  -H "Content-Type: application/json" \
+  -d '{"from_time":"2026-01-15 08:00","to_time":"2026-01-15 09:00","scenario":"","trigger_analyse":true}'
+
+# CLI 等價用法（直接呼叫 /analyse）
+podman exec elk-analyser python gen_fake_data.py --from "2026-01-15 08:00" --scenario A
 
 # 端對端驗證腳本
 bash scripts/generate-observability-incident.sh 1
@@ -219,7 +241,7 @@ curl http://localhost:8080/health
 | `GET`  | `/jobs/{id}/status` | 輪詢非同步任務狀態 |
 | `DELETE` | `/jobs/{id}` | 刪除單筆任務（同時刪除報告檔） |
 | `DELETE` | `/jobs` | 批次刪除（body: `{"ids":[1,2]}`） |
-| `POST` | `/demo/inject` | 注入 WAS/MQ/PostgreSQL 模擬資料（時間預設動態計算） |
+| `POST` | `/demo/inject` | 注入 WAS/MQ/PostgreSQL 模擬資料；`scenario`（A~D，預設 A）模擬 Alert 觸發並附模擬 Instana 資料，`""` 為純 ELK |
 | `GET`  | `/health` | 健康檢查 |
 
 **觸發模式（`trigger` 欄位）說明：**

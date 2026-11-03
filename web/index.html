@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Updated: 2026-09-15 22:05:30 +0800 -->
+<!-- Updated: 2026-11-03 10:18:43 +0800 -->
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
@@ -521,6 +521,16 @@ body::before{
             <label class="form-label" for="to-time">結束時間</label>
             <input class="form-input" type="datetime-local" id="to-time">
           </div>
+          <div class="form-row">
+            <label class="form-label" for="demo-scenario">Demo 故障場景（Instana + Log 根因分析）</label>
+            <select class="form-input" id="demo-scenario">
+              <option value="A">A：PostgreSQL 連線數耗盡</option>
+              <option value="B">B：Liberty JVM 記憶體洩漏</option>
+              <option value="C">C：來源帳號不存在（FK 違反）</option>
+              <option value="D">D：PostgreSQL 磁碟滿</option>
+              <option value="">純 ELK（整段 from~to，不含 Instana）</option>
+            </select>
+          </div>
         </div>
         <div class="btn-group">
           <button class="btn-primary" id="btn-analyse" onclick="triggerAnalyse()">▶ 立即分析</button>
@@ -898,11 +908,14 @@ async function injectDemo() {
     const res  = await fetch(`${API}/demo/inject`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({from_time: fromTime, to_time: toTime, trigger_analyse: true}),
+      body: JSON.stringify({from_time: fromTime, to_time: toTime, trigger_analyse: true,
+                            scenario: $('demo-scenario').value}),
     });
     const data = await res.json();
     if (res.ok) {
-      fb.textContent = 'Demo 資料注入完成，分析已觸發';
+      fb.textContent = $('demo-scenario').value
+        ? `Demo 資料注入完成（場景 ${$('demo-scenario').value}），Instana + Log 根因分析已觸發`
+        : 'Demo 資料注入完成，分析已觸發';
       fb.className   = 'form-feedback ok';
       loadJobs();
     } else {
